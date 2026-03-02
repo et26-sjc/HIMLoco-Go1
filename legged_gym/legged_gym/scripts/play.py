@@ -30,6 +30,8 @@
 
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import os
+os.environ['WANDB_DISABLED'] = 'true'
+os.environ['WANDB_MODE'] = 'disabled'
 
 import isaacgym
 from legged_gym.envs import *
