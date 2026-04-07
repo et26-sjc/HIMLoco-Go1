@@ -107,8 +107,11 @@ class HIMOnPolicyRunner:
                 dir=self.log_dir,
                 group=wandb_group,
                 tags=wandb_tags,
-                sync_tensorboard=True  # Sync TensorBoard logs to W&B
+                sync_tensorboard=False  # Avoid duplicated/conflicting series with manual wandb.log steps
             )
+            # Use explicit iteration as the single global step axis in W&B.
+            wandb.define_metric("trainer/iteration")
+            wandb.define_metric("*", step_metric="trainer/iteration")
             
             # Watch model for gradients and parameters
             wandb.watch(self.alg.actor_critic, log="all", log_freq=100, log_graph=True)
@@ -134,8 +137,8 @@ class HIMOnPolicyRunner:
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
 
         # For additional W&B logging
-        action_buffer = deque(maxlen=1000)
-        value_buffer = deque(maxlen=1000)
+        self.action_buffer = deque(maxlen=1000)
+        self.value_buffer = deque(maxlen=1000)
         
         tot_iter = self.current_learning_iteration + num_learning_iterations
         for it in range(self.current_learning_iteration, tot_iter):
@@ -171,10 +174,10 @@ class HIMOnPolicyRunner:
                         # Store actions and values for additional logging - 修复后的代码
                         if self.use_wandb and i % 10 == 0:  # Sample every 10 steps to avoid too much data
                             with torch.no_grad():
-                                action_buffer.extend(actions.cpu().numpy().flatten().tolist())
+                                self.action_buffer.extend(actions.cpu().numpy().flatten().tolist())
                                 # 修复：evaluate 只需要一个参数
                                 values = self.alg.actor_critic.evaluate(critic_obs)
-                                value_buffer.extend(values.cpu().numpy().flatten().tolist())
+                                self.value_buffer.extend(values.cpu().numpy().flatten().tolist())
 
                 stop = time.time()
                 collection_time = stop - start
@@ -268,6 +271,8 @@ class HIMOnPolicyRunner:
         
         # W&B logging data
         log_data.update({
+            'trainer/iteration': locs['it'],
+            'trainer/timesteps': self.tot_timesteps,
             'Loss/value_function': locs['mean_value_loss'],
             'Loss/surrogate': locs['mean_surrogate_loss'],
             'Loss/Estimation Loss': locs['mean_estimation_loss'],
@@ -306,7 +311,7 @@ class HIMOnPolicyRunner:
                 log_data['Distributions/values'] = wandb.Histogram(self.value_buffer)
             
             # Log to W&B
-            wandb.log(log_data, step=locs['it'])
+            wandb.log(log_data)
 
         str = f" \033[1m Learning iteration {locs['it']}/{self.current_learning_iteration + locs['num_learning_iterations']} \033[0m "
 
