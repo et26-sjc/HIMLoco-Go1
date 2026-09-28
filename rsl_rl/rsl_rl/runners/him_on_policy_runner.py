@@ -50,10 +50,12 @@ class HIMOnPolicyRunner:
                  log_dir=None,
                  device='cpu',
                  use_wandb=True,
-                 wandb_project="rsl_rl_him",
+                 wandb_project="himloco-go1-baseline",
                  wandb_entity=None,
                  wandb_group=None,
-                 wandb_tags=None):
+                 wandb_tags=None,
+                 wandb_log_distributions=True,
+                 wandb_log_models=False):
 
         self.cfg=train_cfg["runner"]
         self.alg_cfg = train_cfg["algorithm"]
@@ -87,9 +89,19 @@ class HIMOnPolicyRunner:
         self.tot_time = 0
         self.current_learning_iteration = 0
 
-        # W&B setup
-        self.use_wandb = use_wandb
-        if self.use_wandb and self.log_dir is not None:
+        # W&B setup. Environment variables make it easy to route a baseline run
+        # to a new W&B project without changing source code.
+        self.use_wandb = use_wandb and self.log_dir is not None
+        self.wandb_log_distributions = wandb_log_distributions
+        self.wandb_log_models = wandb_log_models
+        if self.use_wandb:
+            project = os.getenv("WANDB_PROJECT", wandb_project)
+            entity = os.getenv("WANDB_ENTITY", wandb_entity)
+            group = os.getenv("WANDB_RUN_GROUP", wandb_group)
+            env_tags = os.getenv("WANDB_TAGS")
+            tags = [tag.strip() for tag in env_tags.split(",") if tag.strip()] if env_tags else wandb_tags
+            run_name = self.cfg.get("run_name") or None
+
             wandb_config = {
                 **self.cfg,
                 **self.alg_cfg,
@@ -97,24 +109,24 @@ class HIMOnPolicyRunner:
                 "num_envs": self.env.num_envs,
                 "num_actor_obs": self.num_actor_obs,
                 "num_critic_obs": self.num_critic_obs,
-                "device": str(self.device)
+                "num_one_step_obs": self.env.num_one_step_obs,
+                "num_actions": self.env.num_actions,
+                "device": str(self.device),
             }
-            
+
             wandb.init(
-                project=wandb_project,
-                entity=wandb_entity,
+                project=project,
+                entity=entity,
+                name=run_name,
                 config=wandb_config,
                 dir=self.log_dir,
-                group=wandb_group,
-                tags=wandb_tags,
-                sync_tensorboard=False  # Avoid duplicated/conflicting series with manual wandb.log steps
+                group=group,
+                tags=tags,
+                sync_tensorboard=False,
             )
-            # Use explicit iteration as the single global step axis in W&B.
+            # Use one explicit x-axis for all manually logged metrics.
             wandb.define_metric("trainer/iteration")
             wandb.define_metric("*", step_metric="trainer/iteration")
-            
-            # Watch model for gradients and parameters
-            wandb.watch(self.alg.actor_critic, log="all", log_freq=100, log_graph=True)
 
         _, _ = self.env.reset()
     
@@ -171,11 +183,10 @@ class HIMOnPolicyRunner:
                         cur_reward_sum[new_ids] = 0
                         cur_episode_length[new_ids] = 0
 
-                        # Store actions and values for additional logging - 修复后的代码
-                        if self.use_wandb and i % 10 == 0:  # Sample every 10 steps to avoid too much data
+                        # Keep a small rolling sample for optional W&B histograms.
+                        if self.use_wandb and self.wandb_log_distributions and i % 10 == 0:
                             with torch.no_grad():
                                 self.action_buffer.extend(actions.cpu().numpy().flatten().tolist())
-                                # 修复：evaluate 只需要一个参数
                                 values = self.alg.actor_critic.evaluate(critic_obs)
                                 self.value_buffer.extend(values.cpu().numpy().flatten().tolist())
 
@@ -190,46 +201,16 @@ class HIMOnPolicyRunner:
             stop = time.time()
             learn_time = stop - start
             
-            # Log gradients and parameters to W&B
-            if self.use_wandb and it % 10 == 0:  # Log every 10 iterations to avoid overhead
-                self._log_gradients_and_parameters(it)
-            
             if self.log_dir is not None:
                 self.log(locals())
             if it % self.save_interval == 0:
                 self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
-                if self.use_wandb:
-                    wandb.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             ep_infos.clear()
         
         self.current_learning_iteration += num_learning_iterations
         self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)))
         if self.use_wandb:
-            wandb.save(os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)))
             wandb.finish()
-
-    def _log_gradients_and_parameters(self, iteration):
-        """Log gradients and parameters to W&B"""
-        gradients = {}
-        parameters = {}
-        
-        for name, param in self.alg.actor_critic.named_parameters():
-            if param.grad is not None:
-                gradients[f'gradients/{name}'] = wandb.Histogram(param.grad.cpu().detach().numpy())
-            parameters[f'parameters/{name}'] = wandb.Histogram(param.cpu().detach().numpy())
-        
-        # Log gradient norms
-        total_grad_norm = 0
-        for name, param in self.alg.actor_critic.named_parameters():
-            if param.grad is not None:
-                total_grad_norm += param.grad.data.norm(2).item() ** 2
-        total_grad_norm = total_grad_norm ** 0.5
-        
-        wandb.log({
-            **gradients,
-            **parameters,
-            'Metrics/total_gradient_norm': total_grad_norm
-        }, step=iteration)
 
     def log(self, locs, width=80, pad=35):
         self.tot_timesteps += self.num_steps_per_env * self.env.num_envs
@@ -252,7 +233,7 @@ class HIMOnPolicyRunner:
                     infotensor = torch.cat((infotensor, ep_info[key].to(self.device)))
                 value = torch.mean(infotensor)
                 self.writer.add_scalar('Episode/' + key, value, locs['it'])
-                log_data[f'Episode/{key}'] = value
+                log_data[f'Episode/{key}'] = value.item()
                 ep_string += f"""{f'Mean episode {key}:':>{pad}} {value:.4f}\n"""
         
         mean_std = self.alg.actor_critic.std.mean()
@@ -305,12 +286,10 @@ class HIMOnPolicyRunner:
 
         # Additional W&B logging
         if self.use_wandb:
-            # Log action and value distributions
-            if hasattr(self, 'action_buffer') and len(self.action_buffer) > 0:
+            if self.wandb_log_distributions and len(self.action_buffer) > 0:
                 log_data['Distributions/actions'] = wandb.Histogram(self.action_buffer)
                 log_data['Distributions/values'] = wandb.Histogram(self.value_buffer)
-            
-            # Log to W&B
+
             wandb.log(log_data)
 
         str = f" \033[1m Learning iteration {locs['it']}/{self.current_learning_iteration + locs['num_learning_iterations']} \033[0m "
@@ -357,12 +336,13 @@ class HIMOnPolicyRunner:
         }
         torch.save(saved_dict, path)
         
-        # Also log model as artifact to W&B
-        if self.use_wandb:
+        # Model uploads are opt-in: local checkpoints remain the source of truth
+        # and large artifact traffic does not slow baseline training by default.
+        if self.use_wandb and self.wandb_log_models:
             artifact = wandb.Artifact(
                 name=f"model_iter_{self.current_learning_iteration}",
                 type="model",
-                description=f"Model checkpoint at iteration {self.current_learning_iteration}"
+                description=f"Model checkpoint at iteration {self.current_learning_iteration}",
             )
             artifact.add_file(path)
             wandb.log_artifact(artifact)
