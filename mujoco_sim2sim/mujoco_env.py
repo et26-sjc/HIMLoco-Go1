@@ -290,15 +290,21 @@ class MujocoGo1Env:
     def step(self, action: np.ndarray) -> np.ndarray:
         mujoco = self.mujoco
 
-        tau = self._compute_torque(action)
-        self.last_actions[:] = np.clip(action, -1.0, 1.0)
+        clipped_action = np.clip(action, -1.0, 1.0)
 
-        if self._dbg_enabled:
-            self._update_debug_saturation(action, tau)
-
+        # Match LeggedGym: the policy action is held for all decimation
+        # substeps, while the PD torque is recomputed from the latest q/dq
+        # at every physics step.
+        tau = None
         for _ in range(self.pcfg.decimation):
+            tau = self._compute_torque(clipped_action)
             self.data.ctrl[np.array(self.actuator_ids, dtype=np.int32)] = tau
             mujoco.mj_step(self.model, self.data)
+
+        self.last_actions[:] = clipped_action
+
+        if self._dbg_enabled:
+            self._update_debug_saturation(clipped_action, tau)
 
         if self._dbg_enabled:
             self._update_debug_kinematics()
