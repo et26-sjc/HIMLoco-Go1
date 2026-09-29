@@ -5,11 +5,12 @@ from torch import nn
 
 from .quietpaw_him_ppo import QuietPawHIMPPO
 from .quietpaw_pid import QuietPawPID
+from .quietpaw_assignment import balanced_assignment
 from rsl_rl.storage.quietpaw_cmdp_storage import QuietPawCMDPStorage
 
 
 class QuietPawConstrainedPPO(QuietPawHIMPPO):
-    def __init__(self, *args, cost_value_loss_coef=1.0, pid=None, **kwargs):
+    def __init__(self, *args, cost_value_loss_coef=1.0, pid=None, epsilon_seed=1, epsilon_bins=8, **kwargs):
         super().__init__(*args, **kwargs)
         if not 0 < self.gamma < 1:
             raise ValueError("Normalized discounted cost requires 0 < gamma < 1")
@@ -17,6 +18,7 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         self.pid_cfg = pid or {}
         self.iterations = 0
         self.diagnostics = {}
+        self.epsilon_seed, self.epsilon_bins = epsilon_seed, epsilon_bins
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape,
                      critic_obs_shape, action_shape):
@@ -25,12 +27,30 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         self.storage = QuietPawCMDPStorage(num_envs, num_transitions_per_env,
                                          actor_obs_shape, critic_obs_shape, action_shape, self.device)
         self.transition = QuietPawCMDPStorage.Transition()
-        self.epsilon = torch.linspace(0., 1., num_envs, device=self.device).unsqueeze(1)
+        # Single-cohort initialization for standalone algorithm tests. The runner
+        # replaces this with the actual joint terrain/command stratification.
+        self.epsilon, self.epsilon_labels = balanced_assignment(
+            torch.zeros(num_envs), torch.zeros(num_envs), self.epsilon_seed,
+            min(self.epsilon_bins, num_envs))
+        self.epsilon = self.epsilon.to(self.device)
+        self.epsilon_labels = self.epsilon_labels.to(self.device)
         self.pid = QuietPawPID(self.epsilon, **self.pid_cfg)
         self.episode_cost = torch.zeros_like(self.epsilon)
         self.episode_discount = torch.ones_like(self.epsilon)
         self.completed_cost = torch.zeros_like(self.epsilon)
         self.completed_count = torch.zeros_like(self.epsilon)
+        self.metric_sums = {}
+        self.metric_steps = 0
+        self.success_count = torch.zeros_like(self.epsilon)
+
+    def configure_assignment(self, terrain, command):
+        epsilon, labels = balanced_assignment(terrain, command, self.epsilon_seed, self.epsilon_bins)
+        self.epsilon.copy_(epsilon.to(self.device))
+        self.epsilon_labels = labels.to(self.device)
+        self.pid = QuietPawPID(self.epsilon, **self.pid_cfg)
+        self.assignment = dict(seed=self.epsilon_seed, bins=self.epsilon_bins,
+                               terrain=terrain.cpu().tolist(), command=command.cpu().tolist(),
+                               epsilon=epsilon.flatten().tolist(), labels=labels.tolist())
 
     def act(self, obs, critic_obs):
         ac, tr = self.actor_critic, self.transition
@@ -53,10 +73,13 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         timeout = infos.get("time_outs", torch.zeros_like(dones)).to(self.device).bool().reshape(-1, 1)
         if (timeout & ~done).any():
             raise ValueError("A timeout must also terminate its rollout segment")
+        failure = infos["quietpaw"].get("failure", torch.zeros_like(dones)).to(self.device).bool().reshape(-1, 1)
+        timeout = timeout & ~failure  # physical failure wins if both flags occur
         # next_critic_obs has the PRE-RESET terminal observation restored by the
         # inherited HIM runner. A reset observation must never bootstrap cost.
         with torch.no_grad():
             terminal_cost_value = self.actor_critic.evaluate_cost(next_critic_obs, tr.epsilon)
+            terminal_reward_value = self.actor_critic.evaluate(next_critic_obs, tr.epsilon)
         tr.noise_cost = cost.clone()
         tr.cost_reward = (1 - self.gamma) * cost + self.gamma * timeout * terminal_cost_value
         self.episode_cost += self.episode_discount * (1 - self.gamma) * cost
@@ -66,9 +89,22 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         self.completed_count += done
         self.episode_cost[done] = 0.
         self.episode_discount[done] = 1.
-        # Retains HIM's reward handling, timeout convention, next-state target
-        # and reset path. Costs NEVER modify the locomotion reward.
-        super().process_env_step(rewards, dones, infos, next_critic_obs)
+        # Keep old tr.values = V(s_t) for PPO clipping/GAE. Both timeout targets
+        # use the same terminal observation and the transition's epsilon.
+        tr.next_critic_observations = next_critic_obs.clone()
+        tr.rewards = rewards.clone() + self.gamma * (timeout * terminal_reward_value).squeeze(-1)
+        tr.dones = dones
+        self.storage.add_transitions(tr)
+        tr.clear()
+        self.actor_critic.reset(dones)
+        metrics = {"reward": rewards, **infos["quietpaw"]}
+        for name, value in metrics.items():
+            value = value.to(self.device).reshape(-1, 1).float()
+            if name not in self.metric_sums:
+                self.metric_sums[name] = torch.zeros_like(self.epsilon)
+            self.metric_sums[name] += value
+        self.metric_steps += 1
+        self.success_count += timeout
 
     def compute_returns(self, last_critic_obs):
         with torch.no_grad():
@@ -158,6 +194,24 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
                                       if valid.any() else 0.),
             "him_updates": updates,
         }
+        for label in self.epsilon_labels.unique().tolist():
+            mask = self.epsilon_labels == label
+            prefix = "epsilon_bin_{}/".format(label)
+            self.diagnostics[prefix + "epsilon_min"] = self.epsilon[mask].min().item()
+            self.diagnostics[prefix + "epsilon_max"] = self.epsilon[mask].max().item()
+            for name, total in self.metric_sums.items():
+                self.diagnostics[prefix + name + "_mean"] = (total[mask].mean() / self.metric_steps).item()
+            episodes = self.completed_count[mask].sum()
+            self.diagnostics[prefix + "completed_episodes"] = episodes.item()
+            self.diagnostics[prefix + "lambda_mean"] = self.pid.multiplier[mask].mean().item()
+            if episodes > 0:
+                self.diagnostics[prefix + "timeout_success_rate"] = (self.success_count[mask].sum() / episodes).item()
+            observed = valid.squeeze(-1) & mask
+            if observed.any():
+                self.diagnostics[prefix + "budget_violation"] = (measured_cost - self.epsilon)[observed].clamp_min(0).mean().item()
+        self.metric_sums.clear()
+        self.metric_steps = 0
+        self.success_count.zero_()
         self.completed_cost.zero_()
         self.completed_count.zero_()
         self.iterations += 1

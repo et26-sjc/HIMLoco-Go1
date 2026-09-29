@@ -38,6 +38,8 @@ class QuietPawStage1Go1CfgPPO(QuietPawGo1CfgPPO):
 
     class algorithm(Go1RoughCfgPPO.algorithm):
         cost_value_loss_coef = 1.0
+        epsilon_seed = 1
+        epsilon_bins = 8
 
         class pid:
             # QuietPaw specifies PID but does not report its gains.

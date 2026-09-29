@@ -2,6 +2,8 @@
 
 import torch
 import wandb
+import json
+from pathlib import Path
 from .quietpaw_runner import QuietPawRunner
 from .him_on_policy_runner import HIMOnPolicyRunner
 from rsl_rl.modules.quietpaw_conditional_actor_critic import QuietPawConditionalActorCritic
@@ -13,7 +15,9 @@ class QuietPawStage1Runner(QuietPawRunner):
         if train_cfg.get("quietpaw", {}).get("stage") != 1:
             raise ValueError("QuietPawStage1Runner requires stage=1")
         self.contract = {
-            "version": 1,
+            "version": 2,
+            "reward_bootstrap": "terminal_critic_observation",
+            "epsilon_assignment": "joint_cohort_stratified_full_grid_v1",
             "noise_definition": "normalized_complement_v1",
             "budget": "normalized_discounted_episode_return",
             "sampling": "policy_step_pre_reset",
@@ -27,6 +31,13 @@ class QuietPawStage1Runner(QuietPawRunner):
             ("sigma_force", "sigma_velocity", "contact_threshold")}
         # Bypass the Stage 0 guard, while retaining its class-selection extension.
         HIMOnPolicyRunner.__init__(self, env, train_cfg, *args, **kwargs)
+        terrain = getattr(env, "terrain_types", torch.zeros(env.num_envs, dtype=torch.long))
+        command = (torch.arange(env.num_envs) < env.num_envs * 0.2).long()
+        self.alg.configure_assignment(terrain, command)
+        if self.log_dir is not None:
+            Path(self.log_dir).mkdir(parents=True, exist_ok=True)
+            (Path(self.log_dir) / "epsilon_assignment.json").write_text(
+                json.dumps(self.alg.assignment, indent=2))
         print("QuietPaw Stage 1 uses documented reproduction assumptions: "
               "normalized_complement_v1, discounted cost budget, per-env PID. "
               "No value decomposition; see docs/quietpaw_stage1.md.")
@@ -60,6 +71,7 @@ class QuietPawStage1Runner(QuietPawRunner):
             "contract": self.contract,
             "pid": self.alg.pid.state_dict(),
             "learning_rate": self.alg.learning_rate,
+            "assignment": self.alg.assignment,
         }
         # PhysX state is not saved by HIM. Incomplete episode accumulators are
         # intentionally not resumed into fresh environments.
@@ -75,6 +87,8 @@ class QuietPawStage1Runner(QuietPawRunner):
             raise ValueError("QuietPaw checkpoint contract mismatch (cost/budget/algorithm)")
         if load_optimizer and not torch.equal(saved["pid"]["epsilon"].to(self.alg.epsilon), self.alg.epsilon):
             raise ValueError("Training resume requires the same number of environments/epsilon grid")
+        if load_optimizer and saved["assignment"] != self.alg.assignment:
+            raise ValueError("Training resume requires identical terrain/command/epsilon mapping")
         self.alg.actor_critic.load_state_dict(state["model_state_dict"])
         if load_optimizer:
             self.alg.optimizer.load_state_dict(state["optimizer_state_dict"])

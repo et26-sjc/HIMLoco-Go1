@@ -42,9 +42,13 @@ class QuietPawLeggedRobot(LeggedRobot):
             "df3d_peak": difference.amax(dim=-1) * self.quietpaw_valid,
             "base_acceleration": acceleration * self.quietpaw_valid,
             "touchdown_events": touchdown.sum(dim=-1),
+            "touchdown_speed_peak": ((-self.quietpaw_velocity[..., 2]).clamp_min(0) * touchdown).amax(dim=-1),
             "velocity_tracking_error": torch.linalg.vector_norm(self.commands[:, :2] - self.base_lin_vel[:, :2], dim=-1),
             "tilt": torch.linalg.vector_norm(self.projected_gravity[:, :2], dim=-1),
-            "failure": self.reset_buf & ~self.time_out_buf,
+            # Preserve the actual failure signal even if a time limit happens
+            # on the same step; do not change the environment's reset decision.
+            "failure": torch.any(torch.linalg.vector_norm(
+                self.contact_forces[:, self.termination_contact_indices], dim=-1) > 1., dim=1),
         }
         self.quietpaw_contact.copy_(contact)
         self.quietpaw_velocity.copy_(self.feet_vel)

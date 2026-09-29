@@ -28,7 +28,7 @@ from rsl_rl.runners.him_on_policy_runner import HIMOnPolicyRunner
 
 
 class DummyEnv:
-    num_envs, num_obs, num_privileged_obs, num_one_step_obs, num_actions = 4, 270, 238, 45, 12
+    num_envs, num_obs, num_privileged_obs, num_one_step_obs, num_actions = 10, 270, 238, 45, 12
     cfg = QuietPawStage1Go1Cfg()
 
     def reset(self):
@@ -117,6 +117,7 @@ class QuietPawStage1Tests(unittest.TestCase):
         env = object.__new__(QuietPawLeggedRobot)
         env.cfg, env.dt = QuietPawStage1Go1Cfg(), 0.02
         env.num_envs, env.feet_indices = 2, torch.arange(4)
+        env.termination_contact_indices = torch.tensor([0])
         env.contact_forces = torch.ones(2, 4, 3) * 20
         env.feet_vel = torch.ones(2, 4, 3)
         env.root_states = torch.zeros(2, 13)
@@ -164,15 +165,22 @@ class QuietPawStage1Tests(unittest.TestCase):
         with torch.no_grad():
             alg.act(torch.zeros(2, 270), torch.zeros(2, 238))
             original_values = alg.transition.values.clone()
-            with patch.object(alg.actor_critic, "evaluate_cost", side_effect=lambda obs, eps: obs[:, :1]):
+            transition_epsilon = alg.transition.epsilon.clone()
+            with patch.object(alg.actor_critic, "evaluate_cost", side_effect=lambda obs, eps: obs[:, :1]) as cost_value, \
+                 patch.object(alg.actor_critic, "evaluate", side_effect=lambda obs, eps: 10 * obs[:, :1] + eps) as reward_value:
                 alg.process_env_step(torch.ones(2), torch.ones(2, dtype=torch.bool),
                                      {"quietpaw": {"noise_cost": torch.tensor([.2, .4])},
                                       "time_outs": torch.tensor([True, False])}, next_state)
         torch.testing.assert_close(alg.storage.cost_rewards[0], torch.tensor([[.5], [.2]]))
         torch.testing.assert_close(alg.completed_cost, torch.tensor([[.5], [.2]]))
         torch.testing.assert_close(alg.storage.next_privileged_observations[0], next_state)
-        expected_reward = torch.ones(2, 1) + .5 * original_values * torch.tensor([[1.], [0.]])
+        expected_reward = torch.ones(2, 1) + .5 * (10 * next_state[:, :1] + transition_epsilon) * torch.tensor([[1.], [0.]])
         torch.testing.assert_close(alg.storage.rewards[0], expected_reward)
+        torch.testing.assert_close(alg.storage.values[0], original_values)
+        torch.testing.assert_close(reward_value.call_args.args[0], next_state)
+        torch.testing.assert_close(reward_value.call_args.args[1], transition_epsilon)
+        torch.testing.assert_close(cost_value.call_args.args[0], next_state)
+        torch.testing.assert_close(cost_value.call_args.args[1], transition_epsilon)
         self.assertTrue(torch.equal(alg.episode_cost, torch.zeros(2, 1)))
 
     def test_pid_direction_independence_missing_data_and_checkpoint(self):
@@ -185,6 +193,20 @@ class QuietPawStage1Tests(unittest.TestCase):
         self.assertTrue(torch.equal(other.multiplier, pid.multiplier))
         with self.assertRaises(ValueError):
             QuietPawPID(torch.zeros(2, 1)).load_state_dict(pid.state_dict())
+
+    def test_physical_failure_does_not_bootstrap_even_at_time_limit(self):
+        alg = self.algorithm(num_envs=2)
+        with torch.no_grad():
+            alg.act(torch.zeros(2, 270), torch.zeros(2, 238))
+            with patch.object(alg.actor_critic, "evaluate_cost", return_value=torch.full((2, 1), 99.)), \
+                 patch.object(alg.actor_critic, "evaluate", return_value=torch.full((2, 1), 99.)):
+                alg.process_env_step(torch.ones(2), torch.ones(2, dtype=torch.bool),
+                                     {"quietpaw": {"noise_cost": torch.full((2,), .4),
+                                                   "failure": torch.ones(2, dtype=torch.bool)},
+                                      "time_outs": torch.ones(2, dtype=torch.bool)}, torch.zeros(2, 238))
+        torch.testing.assert_close(alg.storage.rewards[0], torch.ones(2, 1))
+        torch.testing.assert_close(alg.storage.cost_rewards[0], torch.full((2, 1), .2))
+        self.assertEqual(alg.success_count.sum().item(), 0.)
 
     def test_shuffled_batches_keep_conditions_and_targets_aligned(self):
         alg = self.algorithm()
@@ -242,13 +264,16 @@ class QuietPawStage1Tests(unittest.TestCase):
         self.assertFalse(torch.equal(before_cost, ac.cost_critic[-1].weight))
         self.assertEqual(alg.diagnostics["him_updates"], 4)
         self.assertTrue(torch.equal(alg.pid.updates, torch.ones(4, 1, dtype=torch.long)))
-        self.assertEqual(alg.pid.multiplier[-1].item(), 0.)
-        self.assertGreater(alg.pid.multiplier[0].item(), 0.)
+        self.assertEqual(alg.pid.multiplier[alg.epsilon.argmax()].item(), 0.)
+        self.assertGreater(alg.pid.multiplier[alg.epsilon.argmin()].item(), 0.)
         self.assertEqual(alg.lambda_used.sum().item(), 0.)
+        self.assertAlmostEqual(alg.diagnostics["epsilon_bin_0/noise_cost_mean"], .5)
+        self.assertIn("epsilon_bin_0/reward_mean", alg.diagnostics)
+        self.assertIn("epsilon_bin_0/completed_episodes", alg.diagnostics)
 
     def test_resume_restores_pid_optimizers_iteration_and_rejects_contract_change(self):
         cfg = class_to_dict(QuietPawStage1Go1CfgPPO())
-        cfg["algorithm"].update(num_learning_epochs=1, num_mini_batches=2)
+        cfg["algorithm"].update(num_learning_epochs=1, num_mini_batches=2, epsilon_bins=2)
         cfg["runner"]["num_steps_per_env"] = 4
         with contextlib.redirect_stdout(io.StringIO()):
             runner = QuietPawStage1Runner(DummyEnv(), cfg, device="cpu", use_wandb=False)
@@ -266,6 +291,11 @@ class QuietPawStage1Tests(unittest.TestCase):
             self.assertTrue(other.alg.optimizer.state_dict()["state"])
             self.assertTrue(other.alg.actor_critic.estimator.optimizer.state_dict()["state"])
             self.assertEqual(other.alg.episode_cost.sum().item(), 0.)
+            original_mapping = copy.deepcopy(other.alg.assignment)
+            other.alg.assignment["terrain"][0] = 999
+            with self.assertRaisesRegex(ValueError, "mapping"):
+                other.load(path)
+            other.alg.assignment = original_mapping
             other.contract["budget"] = "incorrect"
             with self.assertRaises(ValueError):
                 other.load(path)
