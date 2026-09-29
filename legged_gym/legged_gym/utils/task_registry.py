@@ -36,6 +36,7 @@ import numpy as np
 
 from rsl_rl.env import VecEnv
 from rsl_rl.runners import OnPolicyRunner, HIMOnPolicyRunner, QuietPawRunner
+from rsl_rl.runners.quietpaw_stage1_runner import QuietPawStage1Runner
 
 from legged_gym import LEGGED_GYM_ROOT_DIR, LEGGED_GYM_ENVS_DIR
 from .helpers import get_args, update_cfg_from_args, class_to_dict, get_load_path, set_seed, parse_sim_params
@@ -147,6 +148,7 @@ class TaskRegistry():
         runner_classes = {
             "HIMOnPolicyRunner": HIMOnPolicyRunner,
             "QuietPawRunner": QuietPawRunner,
+            "QuietPawStage1Runner": QuietPawStage1Runner,
         }
         runner_name = train_cfg_dict.get("runner_class_name", "HIMOnPolicyRunner")
         if runner_name not in runner_classes:

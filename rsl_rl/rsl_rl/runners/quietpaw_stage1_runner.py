@@ -1,0 +1,97 @@
+"""Stage 1 reuses HIM collection and exposes explicit conditional inference."""
+
+import torch
+import wandb
+from .quietpaw_runner import QuietPawRunner
+from .him_on_policy_runner import HIMOnPolicyRunner
+from rsl_rl.modules.quietpaw_conditional_actor_critic import QuietPawConditionalActorCritic
+from rsl_rl.algorithms.quietpaw_constrained_ppo import QuietPawConstrainedPPO
+
+
+class QuietPawStage1Runner(QuietPawRunner):
+    def __init__(self, env, train_cfg, *args, **kwargs):
+        if train_cfg.get("quietpaw", {}).get("stage") != 1:
+            raise ValueError("QuietPawStage1Runner requires stage=1")
+        self.contract = {
+            "version": 1,
+            "noise_definition": "normalized_complement_v1",
+            "budget": "normalized_discounted_episode_return",
+            "sampling": "policy_step_pre_reset",
+            "algorithm": train_cfg["algorithm"],
+        }
+        noise_cfg = getattr(env.cfg, "noise_cost", None)
+        if noise_cfg is None or noise_cfg.definition != self.contract["noise_definition"]:
+            raise ValueError("Stage 1 requires the QuietPaw noise measurement environment")
+        self.contract["noise_parameters"] = {
+            name: getattr(noise_cfg, name) for name in
+            ("sigma_force", "sigma_velocity", "contact_threshold")}
+        # Bypass the Stage 0 guard, while retaining its class-selection extension.
+        HIMOnPolicyRunner.__init__(self, env, train_cfg, *args, **kwargs)
+        print("QuietPaw Stage 1 uses documented reproduction assumptions: "
+              "normalized_complement_v1, discounted cost budget, per-env PID. "
+              "No value decomposition; see docs/quietpaw_stage1.md.")
+
+    def _resolve_policy_class(self, name):
+        if name == "QuietPawConditionalActorCritic":
+            return QuietPawConditionalActorCritic
+        return super()._resolve_policy_class(name)
+
+    def _resolve_algorithm_class(self, name):
+        if name == "QuietPawConstrainedPPO":
+            return QuietPawConstrainedPPO
+        return super()._resolve_algorithm_class(name)
+
+    def _evaluate_logging_values(self, critic_obs):
+        return self.alg.actor_critic.evaluate(critic_obs, self.alg.epsilon)
+
+    def log(self, locs, *args, **kwargs):
+        super().log(locs, *args, **kwargs)
+        for name, value in self.alg.diagnostics.items():
+            self.writer.add_scalar("QuietPaw/" + name, value, locs["it"])
+        if self.use_wandb:
+            wandb.log({"trainer/iteration": locs["it"],
+                       **{"quietpaw/" + k: v for k, v in self.alg.diagnostics.items()}})
+        print("QuietPaw:", self.alg.diagnostics)
+
+    def _checkpoint_state(self, infos=None):
+        state = super()._checkpoint_state(infos)
+        state["iter"] = self.alg.iterations
+        state["quietpaw"] = {
+            "contract": self.contract,
+            "pid": self.alg.pid.state_dict(),
+            "learning_rate": self.alg.learning_rate,
+        }
+        # PhysX state is not saved by HIM. Incomplete episode accumulators are
+        # intentionally not resumed into fresh environments.
+        return state
+
+    def load(self, path, load_optimizer=True):
+        state = torch.load(path, map_location=self.device)
+        if "quietpaw" not in state:
+            raise ValueError("Stage 0/HIM checkpoint cannot resume a conditioned model. "
+                             "An explicit weight migration is required.")
+        saved = state["quietpaw"]
+        if saved["contract"] != self.contract:
+            raise ValueError("QuietPaw checkpoint contract mismatch (cost/budget/algorithm)")
+        if load_optimizer and not torch.equal(saved["pid"]["epsilon"].to(self.alg.epsilon), self.alg.epsilon):
+            raise ValueError("Training resume requires the same number of environments/epsilon grid")
+        self.alg.actor_critic.load_state_dict(state["model_state_dict"])
+        if load_optimizer:
+            self.alg.optimizer.load_state_dict(state["optimizer_state_dict"])
+            self.alg.actor_critic.estimator.optimizer.load_state_dict(state["estimator_optimizer_state_dict"])
+            self.alg.pid.load_state_dict(saved["pid"])
+            self.alg.learning_rate = saved["learning_rate"]
+            self.alg.iterations = state["iter"]
+            self.current_learning_iteration = state["iter"]
+            self.alg.episode_cost.zero_()
+            self.alg.episode_discount.fill_(1.)
+            self.alg.completed_cost.zero_()
+            self.alg.completed_count.zero_()
+        return state["infos"]
+
+    def get_inference_policy(self, device=None):
+        self.alg.actor_critic.eval()
+        if device is not None:
+            self.alg.actor_critic.to(device)
+        # Call policy(history_270, epsilon_Nx1). No privileged inputs required.
+        return self.alg.actor_critic.act_inference

@@ -35,6 +35,8 @@ from .a1.a1_config import A1RoughCfg, A1RoughCfgPPO
 from legged_gym.envs.go1.go1_config import Go1RoughCfg, Go1RoughCfgPPO
 from legged_gym.envs.aliengo.aliengo_config import AlienGoRoughCfg, AlienGoRoughCfgPPO
 from .go1.quietpaw_go1_config import QuietPawGo1Cfg, QuietPawGo1CfgPPO
+from .go1.quietpaw_go1_config import QuietPawStage1Go1Cfg, QuietPawStage1Go1CfgPPO
+from .go1.quietpaw_legged_robot import QuietPawLeggedRobot
 
 import os
 
@@ -44,3 +46,4 @@ task_registry.register( "a1", LeggedRobot, A1RoughCfg(), A1RoughCfgPPO() )
 task_registry.register( "go1", LeggedRobot, Go1RoughCfg(), Go1RoughCfgPPO() )
 task_registry.register( "aliengo", LeggedRobot, AlienGoRoughCfg(), AlienGoRoughCfgPPO() )
 task_registry.register("go1_quietpaw", LeggedRobot, QuietPawGo1Cfg(), QuietPawGo1CfgPPO())
+task_registry.register("go1_quietpaw_stage1", QuietPawLeggedRobot, QuietPawStage1Go1Cfg(), QuietPawStage1Go1CfgPPO())

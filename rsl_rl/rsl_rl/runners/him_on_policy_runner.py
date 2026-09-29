@@ -52,6 +52,9 @@ class HIMOnPolicyRunner:
         """Allow extensions to select an algorithm; preserve HIM defaults."""
         return eval(name)
 
+    def _evaluate_logging_values(self, critic_obs):
+        return self.alg.actor_critic.evaluate(critic_obs)
+
     def __init__(self,
                  env: VecEnv,
                  train_cfg,
@@ -195,7 +198,7 @@ class HIMOnPolicyRunner:
                         if self.use_wandb and self.wandb_log_distributions and i % 10 == 0:
                             with torch.no_grad():
                                 self.action_buffer.extend(actions.cpu().numpy().flatten().tolist())
-                                values = self.alg.actor_critic.evaluate(critic_obs)
+                                values = self._evaluate_logging_values(critic_obs)
                                 self.value_buffer.extend(values.cpu().numpy().flatten().tolist())
 
                 stop = time.time()
@@ -334,15 +337,17 @@ class HIMOnPolicyRunner:
                                locs['num_learning_iterations'] - locs['it']):.1f}s\n""")
         print(log_string)
 
-    def save(self, path, infos=None):
-        saved_dict = {
+    def _checkpoint_state(self, infos=None):
+        return {
             'model_state_dict': self.alg.actor_critic.state_dict(),
             'optimizer_state_dict': self.alg.optimizer.state_dict(),
             'estimator_optimizer_state_dict': self.alg.actor_critic.estimator.optimizer.state_dict(),
             'iter': self.current_learning_iteration,
             'infos': infos,
         }
-        torch.save(saved_dict, path)
+
+    def save(self, path, infos=None):
+        torch.save(self._checkpoint_state(infos), path)
         
         # Model uploads are opt-in: local checkpoints remain the source of truth
         # and large artifact traffic does not slow baseline training by default.
