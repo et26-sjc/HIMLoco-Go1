@@ -1,5 +1,12 @@
 # QuietPaw on HIMLoco — Stage 1
 
+**Review corrections C1–C3 are implemented.** See
+[quietpaw_stage1_corrections.md](quietpaw_stage1_corrections.md) for the current
+training/evaluation commands, cohort assignment and validation. Checkpoint
+contract is now v2; pre-correction v1 training checkpoints cannot resume as
+corrected runs. The validation section below is a historical pre-review record,
+not proof that the original timeout handling or epsilon assignment was correct.
+
 Stage 1 implements a conditional actor, asymmetric reward/cost critics,
 separate cost GAE, and PPO-Lagrangian with per-environment PID multipliers.
 It does **not** implement the Stage 2 value decomposition. This is a working
@@ -48,7 +55,7 @@ interpretation if the authors made an error.
 | Contact mask | Not specified | Force-norm >1 N; force term on contact, velocity term only at detected touchdown |
 | Impact velocity | Not specified beyond impact velocity | Previous policy sample's downward world-z foot speed; an approximation to pre-impact normal speed |
 | Timing | Not specified | Existing post-physics/pre-reset boundary, 50 Hz; physics/PD unchanged |
-| Epsilon | III-D: uniform interpolation on [0,1], one per environment | `linspace(0,1,N)`, fixed across rollouts and resets |
+| Epsilon | III-D: uniform interpolation on [0,1], one per environment | Complete `linspace(0,1,N)` grid stratified/shuffled across joint terrain/command cohorts; fixed across rollouts and resets |
 | Budget units | Eq. (3) uses discounted sum; experiments discuss normalized cost | Normalized discounted return, `(1-gamma)*sum(gamma^t*c_t)`; explicit unit choice, not verified author behavior |
 | Cost discount/GAE | Not reported | Inherit HIM gamma and GAE lambda |
 | Multipliers | III-D: independent lambda per environment; PID [53] | Independent PID state per environment, not one global scalar |
@@ -115,8 +122,9 @@ True terminal states have no bootstrap or GAE continuation. A time limit
 adds `gamma*Vc(terminal_state, epsilon)` into the last cost target, then cuts
 the GAE recursion at `done`. A rollout boundary bootstraps the last current
 critic observation normally. The inherited runner already restores terminal
-critic observations before handing them to PPO; no reset observation is used
-for cost bootstrap. Reward-side timeout arithmetic is inherited from HIMPPO.
+critic observations before handing them to PPO. Both reward and cost timeout
+targets now use that terminal observation and the transition epsilon, never
+the reset observation or current-state value. Original HIMPPO is unchanged.
 
 A real simulator check exposed stale `infos['time_outs']` in the original
 environment: it is only updated inside nonempty `reset_idx`, while the current
@@ -126,9 +134,10 @@ stale reward-side timeout corrections in the Stage 1 task.
 
 For each completed episode of length L, the PID measurement is
 `sum_{t<L} gamma^t*c_bar_t`, plus `gamma^L*Vc(terminal)` on a timeout. A physical
-failure truncates with no tail value. The baseline timeout flag convention is
-retained, including timeout precedence if a failure coincides with a time
-limit. Episodes spanning rollout boundaries retain their accumulators.
+failure truncates with no tail value, including a failure coinciding with a
+time limit. Stage 1 reads the physical termination-contact signal separately
+without changing reset decisions. Episodes spanning rollout boundaries retain
+their accumulators.
 
 Each environment gets at most one PID update per PPO iteration using its mean
 over fresh completed episodes. Empty environments retain all PID state; old
@@ -208,7 +217,8 @@ task in `envs/__init__.py`, select its runner in `utils/task_registry.py`, and
 add logging-value/checkpoint-dictionary extension methods in
 `him_on_policy_runner.py`. Its collection/learning loop remains inherited.
 
-The original `train.py` forcibly sets `args.resume=False`; it can start a fresh
+For current commands, including the >=160-environment balanced smoke test,
+use the correction document. The original `train.py` forcibly sets `args.resume=False`; it can start a fresh
 Stage 1 run but cannot honor `--resume`. Use `train_quietpaw.py` for Stage 1.
 The original training script remains unchanged.
 
@@ -217,15 +227,15 @@ source /home/sjc/anaconda3/etc/profile.d/conda.sh
 conda activate himloco
 export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${LD_LIBRARY_PATH:-}"
 
-# Small real training run. Omit num_envs/max_iterations overrides for full training.
+# Balanced real training run. Omit overrides for full training.
 WANDB_MODE=disabled python legged_gym/legged_gym/scripts/train_quietpaw.py \
-  --task go1_quietpaw_stage1 --headless --num_envs 16 --max_iterations 3 \
+  --task go1_quietpaw_stage1 --headless --num_envs 160 --max_iterations 3 \
   --seed 1 --run_name stage1_smoke
 
-# Resume: use the SAME environment count and exact run directory/checkpoint.
+# Resume: use the SAME environment count and a corrected v2 checkpoint.
 WANDB_MODE=disabled python legged_gym/legged_gym/scripts/train_quietpaw.py \
-  --task go1_quietpaw_stage1 --headless --num_envs 16 --max_iterations 1 \
-  --seed 1 --resume --load_run Sep29_18-22-58_stage1_smoke_fixed_timeout \
+  --task go1_quietpaw_stage1 --headless --num_envs 160 --max_iterations 1 \
+  --seed 1 --resume --load_run YOUR_CORRECTED_RUN_DIRECTORY \
   --checkpoint 3 --run_name stage1_resume
 
 python -m unittest discover -s tests -p 'test_quietpaw_stage*.py' -v
@@ -251,8 +261,8 @@ with torch.no_grad():
 ```
 
 The legacy `play.py`/JIT exporter supplies only the 270-D history and is not
-the Stage 1 deployment interface. A conditioned export/evaluation launcher
-is future integration work; do not run the old exporter on this model.
+the Stage 1 deployment interface. The conditional evaluation launcher is now
+`scripts/evaluate_quietpaw.py`; conditioned JIT export remains separate work.
 
 ## Diagnostics and scientific limits
 
@@ -282,9 +292,9 @@ Risks to retain in research reports:
   satisfaction. PID gain scale depends on cost-return units and reward scale.
 - Per-environment completed episodes can be sparse/noisy, causing infrequent
   multiplier updates; short smoke tests cannot tune this behavior.
-- Fixed epsilon assignment can correlate with the baseline's environment/
-  terrain indexing. Keep terrain generation intact and evaluate all epsilon
-  values on matched terrain sets before claiming a Pareto improvement.
+- Cohort-stratified assignment removes the monotone epsilon/environment-ID
+  coupling. It cannot guarantee zero finite-sample correlation or balance of
+  learned future terrain difficulty. Evaluate on matched terrain sets/seeds.
 - Stage 1 direct-conditioned critics are the intermediate reproduction; no
   full CNCP/value-decomposition or quiet-performance result is claimed.
 
