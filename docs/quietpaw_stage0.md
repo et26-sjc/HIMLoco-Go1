@@ -1,5 +1,9 @@
 # QuietPaw reproduction — Stage 0
 
+Historical Stage 0 record. The original tasks and checks remain available;
+the separate Stage 1 task and its explicit reproduction assumptions are
+documented in [quietpaw_stage1.md](quietpaw_stage1.md).
+
 Stage 0 only establishes extension points. It runs the original HIM PPO
 objective, one reward critic, and the original HIM auxiliary update. There is
 no noise optimization, conditional actor, cost critic, multiplier, PID update,
