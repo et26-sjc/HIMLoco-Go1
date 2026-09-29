@@ -30,3 +30,4 @@
 
 from .ppo import PPO
 from .him_ppo import HIMPPO
+from .quietpaw_him_ppo import QuietPawHIMPPO

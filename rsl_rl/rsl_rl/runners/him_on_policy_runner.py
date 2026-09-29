@@ -44,6 +44,14 @@ from rsl_rl.env import VecEnv
 
 class HIMOnPolicyRunner:
 
+    def _resolve_policy_class(self, name):
+        """Allow extensions to select a policy without copying the runner."""
+        return eval(name)
+
+    def _resolve_algorithm_class(self, name):
+        """Allow extensions to select an algorithm; preserve HIM defaults."""
+        return eval(name)
+
     def __init__(self,
                  env: VecEnv,
                  train_cfg,
@@ -68,13 +76,13 @@ class HIMOnPolicyRunner:
             num_critic_obs = self.env.num_obs
         self.num_actor_obs = self.env.num_obs
         self.num_critic_obs = num_critic_obs
-        actor_critic_class = eval(self.cfg["policy_class_name"]) # HIMActorCritic
+        actor_critic_class = self._resolve_policy_class(self.cfg["policy_class_name"])
         actor_critic: HIMActorCritic = actor_critic_class( self.env.num_obs,
                                                         num_critic_obs,
                                                         self.env.num_one_step_obs,
                                                         self.env.num_actions,
                                                         **self.policy_cfg).to(self.device)
-        alg_class = eval(self.cfg["algorithm_class_name"]) # HIMPPO
+        alg_class = self._resolve_algorithm_class(self.cfg["algorithm_class_name"])
         self.alg: HIMPPO = alg_class(actor_critic, device=self.device, **self.alg_cfg)
         self.num_steps_per_env = self.cfg["num_steps_per_env"]
         self.save_interval = self.cfg["save_interval"]
