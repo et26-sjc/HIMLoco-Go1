@@ -8,6 +8,7 @@ from .quietpaw_runner import QuietPawRunner
 from .him_on_policy_runner import HIMOnPolicyRunner
 from rsl_rl.modules.quietpaw_conditional_actor_critic import QuietPawConditionalActorCritic
 from rsl_rl.algorithms.quietpaw_constrained_ppo import QuietPawConstrainedPPO
+from rsl_rl.utils.quietpaw_him_warmstart import initialize_from_him_checkpoint
 
 
 class QuietPawStage1Runner(QuietPawRunner):
@@ -34,6 +35,7 @@ class QuietPawStage1Runner(QuietPawRunner):
         terrain = getattr(env, "terrain_types", torch.zeros(env.num_envs, dtype=torch.long))
         command = (torch.arange(env.num_envs) < env.num_envs * 0.2).long()
         self.alg.configure_assignment(terrain, command)
+        self.initialization = None
         if self.log_dir is not None:
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
             (Path(self.log_dir) / "epsilon_assignment.json").write_text(
@@ -72,6 +74,7 @@ class QuietPawStage1Runner(QuietPawRunner):
             "pid": self.alg.pid.state_dict(),
             "learning_rate": self.alg.learning_rate,
             "assignment": self.alg.assignment,
+            "initialization": self.initialization,
         }
         # PhysX state is not saved by HIM. Incomplete episode accumulators are
         # intentionally not resumed into fresh environments.
@@ -90,6 +93,7 @@ class QuietPawStage1Runner(QuietPawRunner):
         if load_optimizer and saved["assignment"] != self.alg.assignment:
             raise ValueError("Training resume requires identical terrain/command/epsilon mapping")
         self.alg.actor_critic.load_state_dict(state["model_state_dict"])
+        self.initialization = saved.get("initialization")
         if load_optimizer:
             self.alg.optimizer.load_state_dict(state["optimizer_state_dict"])
             self.alg.actor_critic.estimator.optimizer.load_state_dict(state["estimator_optimizer_state_dict"])
@@ -102,6 +106,16 @@ class QuietPawStage1Runner(QuietPawRunner):
             self.alg.completed_cost.zero_()
             self.alg.completed_count.zero_()
         return state["infos"]
+
+    def initialize_from_him(self, checkpoint_path):
+        if self.alg.iterations != 0 or self.current_learning_iteration != 0:
+            raise ValueError("HIM warm-start is only valid before Stage 1 training")
+        self.initialization = initialize_from_him_checkpoint(
+            self.alg.actor_critic, checkpoint_path)
+        if self.log_dir is not None:
+            (Path(self.log_dir) / "him_warmstart.json").write_text(
+                json.dumps(self.initialization, indent=2))
+        return self.initialization
 
     def get_inference_policy(self, device=None):
         self.alg.actor_critic.eval()
