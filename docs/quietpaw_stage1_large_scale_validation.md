@@ -1,5 +1,17 @@
 # Stage 1 large-scale validation
 
+> **Validity correction (2026-09-30):** The 100-iteration policies have not
+> demonstrated basic commanded locomotion. Under a fixed 0.5 m/s command,
+> seed 4's tracking error is approximately 0.501 m/s across epsilon values;
+> under a 1 m/s command it is 0.935--0.907 m/s. At a zero-speed command it is
+> only about 0.036 m/s. A follow-up paired evaluation measured only **0.074
+> m/s actual forward velocity** at a 1 m/s command and epsilon 0.5. These
+> results are consistent with a mostly stationary or weakly moving policy.
+> The epsilon sweeps below establish sensitivity of
+> an **immature** policy, not learned epsilon-conditioned locomotion, effective
+> noise control, or a Pareto frontier. Gait competence must be established
+> before interpreting any noise--performance trade-off.
+
 This experiment asks whether the current HIMLoco + QuietPaw Stage 1 code
 actually produces behavior that depends on the deployment value of
 `epsilon`. It is a validation of the existing implementation, not a change to
@@ -50,6 +62,15 @@ checkpoint. Peak device allocation was approximately 10.1 GiB for seed 4 and
 9.9 GiB for seed 5; neither run ran out of memory. The training log reports 20
 HIM auxiliary updates per PPO iteration and finite reward/cost losses.
 
+This was only 10,000 policy steps per environment, or 200 simulated seconds.
+The repository's HIMLoco paper (Section 3.4) reports that its 4096-environment,
+100-step-rollout baseline needs about **1000 rollouts**, with performance still
+improving until 2000. Total parallel transitions are not a substitute for
+training maturity. In the local original-HIM long run, the tracking reward
+component rose from 0.412 at iteration 100 to 0.644 at iteration 300, while
+mean terrain level rose from 0.13 to 4.33. The Stage 1 seed-4/5 runs were
+still at mean terrain level 0 at iteration 99.
+
 For context, three 160-environment runs (seeds 1, 2 and 3) were also trained
 for 100 iterations, 1,600,000 transitions each. Their fixed-command
 evaluations failed the first episode early (zero survival-to-horizon success),
@@ -90,6 +111,52 @@ The seed-5 confirmation used epsilon `0, .5, 1` under the same
 commands `(0,0,0)` and `(0.5,0,0)`. The output directories contain one JSON
 and log per epsilon, `summary.csv`, `summary.json`, and the reward/noise plot.
 
+### Locomotion competence check (follow-up audit)
+
+The original HIM baseline was evaluated using the user-selected
+`model_7500.pt`, not the late checkpoint that suffered training degradation.
+Both policies ran the same fixed 1 m/s command, 160 environments, evaluation
+seed 11 and 1000-step horizon. Their pre-step terrain, robot and available
+randomization state had the same SHA-256 fingerprint
+`8d06315cc2c3969876e9fe9ed51403f09d0d9765d9db7021dd956c5453d54153`.
+The actual forward velocity was recovered from the privileged observation's
+base-linear-velocity component at each **pre-reset** state; it was used only
+for evaluation, not passed to either actor.
+
+| Policy | Mean forward velocity (m/s) | Tracking error (m/s) | Reward/live step | 20 s survival |
+| --- | ---: | ---: | ---: | ---: |
+| Original HIM, iteration 7500 | 0.908 | 0.160 | 0.02355 | 0.831 |
+| Stage 1, iteration 100, epsilon 0.5 | 0.074 | 0.932 | 0.00957 | 0.563 |
+| Stage 1, iteration 500, epsilon 0.5 | 0.550 | 0.510 | 0.01625 | 0.850 |
+| Stage 1, iteration 1000, epsilon 0.5 | 0.576 | 0.473 | 0.01747 | 0.881 |
+
+These checkpoints used different training seeds and update counts. The
+500- and 1000-iteration Stage 1 checkpoints resumed from earlier iterations
+without restoring the simulator's full state. This is a locomotion-competence
+reference, **not** an attribution of the difference to CMDP. It shows that
+the 100-iteration policy cannot support a test of quiet commanded locomotion;
+by iterations 500 and 1000, it moves forward but still tracks well below the
+mature HIM reference. Read-only evaluation logs are
+`/tmp/quietpaw_him_baseline7500_fixed1_eval.log`,
+`/tmp/quietpaw_stage1_100_fixed1_eval.log` and
+`/tmp/quietpaw_stage1_500_fixed1_eval.log` and
+`/tmp/quietpaw_stage1_1000_fixed1_eval.log`.
+
+The iteration-1000 checkpoint was additionally evaluated with the existing
+epsilon-sweep launcher at epsilon `{0, .05, .1, .15, .2, .25, .5, 1}` on the
+same 160-environment, seed-11, fixed-command, 20-second protocol. All workers
+had the same initial fingerprint. Tracking error remained around 0.46--0.48
+m/s and observed normalized discounted cost around 0.173--0.175; none of
+these quantities varied monotonically with epsilon. Epsilon at or below 0.15 was
+still over budget, whereas epsilon 0.2 and above was satisfied under this
+sampled cost metric. At iteration 1000, 703 of 4096 PID multipliers were
+positive, with the highest active epsilon about 0.187. The sweep is an
+exploratory training-maturity diagnostic, **not** a claim of successful
+constraint control. It still lacks the tracking quality of the selected HIM
+baseline and tests only one Stage 1 training seed. Artifacts are
+`legged_gym/logs/quietpaw_stage1_maturity_eval_1000_cmd1/` and
+`/tmp/quietpaw_stage1_maturity_eval_1000_cmd1.log`.
+
 ## Results: command `(1,0,0)`
 
 Seed 4 produced a strictly monotone response across all nine epsilon levels in
@@ -109,9 +176,10 @@ base-acceleration means in the full sweep). The endpoints are:
 | base acceleration mean | 1.401 | 1.682 | +0.281 |
 | touchdown events/episode | 104.69 | 93.72 | -10.97 |
 
-The paired initial-state hash was identical for all nine workers. This is
-strong evidence that the actor uses epsilon to select different closed-loop
-behavior under otherwise matched conditions.
+The paired initial-state hash was identical for all nine workers. This shows
+that the immature actor's closed-loop behavior is epsilon-sensitive under
+otherwise matched initial conditions. It does not establish that the actor
+has learned to walk at the commanded speed.
 
 Seed 5 reproduces the main direction at the endpoints, although its policy is
 less stable under this command:
@@ -167,19 +235,21 @@ training/evaluation stdout is in `/tmp/quietpaw_large_*.log`.
 
 ## Conclusion and limits
 
-The implementation passes the causal measurement checks: epsilon assignment
-is balanced, each paired sweep has identical initial conditions, and a
-4096-environment checkpoint changes its closed-loop locomotion and physical
-diagnostics substantially and repeatably when epsilon changes. This supports
-the narrow conclusion that the current HIMLoco + QuietPaw actor is
-epsilon-conditioned.
+The implementation passes the assignment and paired-initialization checks:
+epsilon assignment is balanced, and each paired sweep starts from identical
+recorded initial conditions. The 4096-environment checkpoint changes its
+behavior when epsilon changes, but the fixed-command tracking errors show
+that 100 iterations are insufficient to validate **epsilon-conditioned
+locomotion**. The supported conclusion is only epsilon sensitivity in an
+immature policy.
 
 It does **not** establish a successful quiet-locomotion Pareto frontier. The
 large-command response often trades away survival and return as epsilon grows,
 and the sampled noise proxy decreases rather than increasing with the larger
-budget. The 160-environment policies also show training instability. Before
-claiming a faithful QuietPaw reproduction, train multiple long runs, add a
-fixed-epsilon/unconditioned control, inspect lambda and budget calibration,
-and test whether the desired cost-performance direction survives commands,
-terrain cohorts and seeds. Those are follow-up experiments; no algorithm code
-was changed in this validation.
+budget. Shorter failed episodes also lower total return and discounted cost.
+The 160-environment policies show training instability. Before any CMDP or
+Pareto claim, first demonstrate commanded forward speed, acceptable tracking,
+survival and a locomotion gait against a mature HIM baseline under matched
+conditions. Then train and evaluate multiple sufficiently mature Stage 1 seeds,
+inspect lambda and budget calibration, and compare commands and terrain
+cohorts. No algorithm code was changed in this validation.
