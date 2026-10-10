@@ -1,5 +1,12 @@
 # QuietPaw on HIMLoco — Stage 1
 
+**Current training defaults use contract v3:** epsilon itself is the actual
+cost budget, sampled directly on `[0.2, 1.0]`, and the force/touchdown-speed
+weights are `0.2/0.8`. See [budget/velocity experiment](quietpaw_budget_velocity.md)
+for commands and interpretation. The v1/v2 definitions below describe the
+earlier equal-weight, absolute-epsilon experiment; v2 checkpoints can still
+be evaluated with their saved definition but cannot resume as v3 training.
+
 **Review corrections C1–C3 are implemented.** See
 [quietpaw_stage1_corrections.md](quietpaw_stage1_corrections.md) for the current
 training/evaluation commands, cohort assignment and validation. Checkpoint

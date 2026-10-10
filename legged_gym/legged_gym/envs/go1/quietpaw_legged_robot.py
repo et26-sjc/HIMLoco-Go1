@@ -2,7 +2,7 @@
 
 import torch
 from legged_gym.envs.base.legged_robot import LeggedRobot
-from .quietpaw_noise import noise_cost
+from .quietpaw_noise import noise_cost_components
 
 
 class QuietPawLeggedRobot(LeggedRobot):
@@ -14,7 +14,7 @@ class QuietPawLeggedRobot(LeggedRobot):
         self.quietpaw_velocity = torch.zeros(*shape, 3, device=self.device)
         self.quietpaw_force = torch.zeros(*shape, 3, device=self.device)
         self.quietpaw_base_velocity = torch.zeros(self.num_envs, 3, device=self.device)
-        if self.cfg.noise_cost.definition != "normalized_complement_v1":
+        if self.cfg.noise_cost.definition not in ("normalized_complement_v1", "normalized_complement_v2"):
             raise ValueError("Unknown noise definition; use an explicitly documented reproduction assumption.")
 
     def compute_reward(self):
@@ -26,15 +26,19 @@ class QuietPawLeggedRobot(LeggedRobot):
         self.extras["time_outs"] = self.time_out_buf.clone()
         force = self.contact_forces[:, self.feet_indices].clone()
         cfg = self.cfg.noise_cost
-        cost, contact, touchdown = noise_cost(
+        force_cost, impact_cost, contact, touchdown = noise_cost_components(
             force, self.quietpaw_velocity, self.quietpaw_contact, self.quietpaw_valid,
-            cfg.sigma_force, cfg.sigma_velocity, cfg.contact_threshold)
+            cfg.sigma_force, cfg.sigma_velocity, cfg.contact_threshold,
+            cfg.force_weight, cfg.impact_weight)
+        cost = force_cost + impact_cost
         magnitude = torch.linalg.vector_norm(force, dim=-1)
         difference = torch.linalg.vector_norm(force - self.quietpaw_force, dim=-1) / self.dt
         acceleration = torch.linalg.vector_norm(
             self.root_states[:, 7:10] - self.quietpaw_base_velocity, dim=-1) / self.dt
         self.extras["quietpaw"] = {
             "noise_cost": cost.clone(),
+            "noise_force_cost": force_cost.clone(),
+            "noise_impact_cost": impact_cost.clone(),
             # Diagnostic peaks are across feet at a 50-Hz sample, NOT 200-Hz
             # contact-impact peaks. They never enter optimization.
             "fz_peak": force[..., 2].clamp_min(0).amax(dim=-1),

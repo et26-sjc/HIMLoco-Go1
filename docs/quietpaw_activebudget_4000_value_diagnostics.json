@@ -1,0 +1,390 @@
+{
+  "checkpoint_iteration": 4000,
+  "command": [
+    1,
+    0,
+    0
+  ],
+  "evaluation_seed": 11,
+  "epsilon": 0.08,
+  "num_envs": 4096,
+  "horizon_steps": 1000,
+  "protocol": "Deterministic deployment first episodes. GAE is reconstructed for transitions 1..999 with pre-reset terminal critic values and physical failures unbootstrapped. This is a deployment diagnostic, not a sampled training minibatch.",
+  "same_history_epsilon_endpoints": {
+    "minimum": 0.08,
+    "maximum": 0.12,
+    "sampled_steps": 50,
+    "mean_rms_action_change": 0.0010618905280716717,
+    "mean_rms_PD_target_change_rad": 0.0002654726320179179,
+    "steps": [
+      {
+        "step": 0,
+        "active": 4096,
+        "rms_action_change": 0.0011425770353525877,
+        "mean_absolute_action_change": 0.0008891745237633586,
+        "p99_absolute_action_change": 0.00279152300208807
+      },
+      {
+        "step": 20,
+        "active": 4096,
+        "rms_action_change": 0.001071464503183961,
+        "mean_absolute_action_change": 0.000872124801389873,
+        "p99_absolute_action_change": 0.002793550491333008
+      },
+      {
+        "step": 40,
+        "active": 4089,
+        "rms_action_change": 0.0010651418706402183,
+        "mean_absolute_action_change": 0.0008653572294861078,
+        "p99_absolute_action_change": 0.0027947421185672283
+      },
+      {
+        "step": 60,
+        "active": 4070,
+        "rms_action_change": 0.001028101658448577,
+        "mean_absolute_action_change": 0.0008481078548356891,
+        "p99_absolute_action_change": 0.0026235394179821014
+      },
+      {
+        "step": 80,
+        "active": 4061,
+        "rms_action_change": 0.000996356480754912,
+        "mean_absolute_action_change": 0.0008282242342829704,
+        "p99_absolute_action_change": 0.002429650165140629
+      },
+      {
+        "step": 100,
+        "active": 4055,
+        "rms_action_change": 0.0010326927294954658,
+        "mean_absolute_action_change": 0.0008522661519236863,
+        "p99_absolute_action_change": 0.0025020744651556015
+      },
+      {
+        "step": 120,
+        "active": 4049,
+        "rms_action_change": 0.0010681647108867764,
+        "mean_absolute_action_change": 0.0008688330417498946,
+        "p99_absolute_action_change": 0.002717840950936079
+      },
+      {
+        "step": 140,
+        "active": 4044,
+        "rms_action_change": 0.0010672222124412656,
+        "mean_absolute_action_change": 0.0008646645583212376,
+        "p99_absolute_action_change": 0.0027284114621579647
+      },
+      {
+        "step": 160,
+        "active": 4043,
+        "rms_action_change": 0.0010526231490075588,
+        "mean_absolute_action_change": 0.0008549310150556266,
+        "p99_absolute_action_change": 0.0026471614837646484
+      },
+      {
+        "step": 180,
+        "active": 4043,
+        "rms_action_change": 0.0010475012240931392,
+        "mean_absolute_action_change": 0.0008571675280109048,
+        "p99_absolute_action_change": 0.0025715120136737823
+      },
+      {
+        "step": 200,
+        "active": 4040,
+        "rms_action_change": 0.001057927613146603,
+        "mean_absolute_action_change": 0.0008627226343378425,
+        "p99_absolute_action_change": 0.002641351893544197
+      },
+      {
+        "step": 220,
+        "active": 4020,
+        "rms_action_change": 0.0010688952170312405,
+        "mean_absolute_action_change": 0.0008680983446538448,
+        "p99_absolute_action_change": 0.002679782919585705
+      },
+      {
+        "step": 240,
+        "active": 3990,
+        "rms_action_change": 0.00107451097574085,
+        "mean_absolute_action_change": 0.0008706058724783361,
+        "p99_absolute_action_change": 0.0027282615192234516
+      },
+      {
+        "step": 260,
+        "active": 3941,
+        "rms_action_change": 0.0010704819578677416,
+        "mean_absolute_action_change": 0.0008671970572322607,
+        "p99_absolute_action_change": 0.002716665854677558
+      },
+      {
+        "step": 280,
+        "active": 3898,
+        "rms_action_change": 0.0010727260960265994,
+        "mean_absolute_action_change": 0.0008703971980139613,
+        "p99_absolute_action_change": 0.0027130842208862305
+      },
+      {
+        "step": 300,
+        "active": 3866,
+        "rms_action_change": 0.0010681238491088152,
+        "mean_absolute_action_change": 0.0008664606721140444,
+        "p99_absolute_action_change": 0.0026979660615324974
+      },
+      {
+        "step": 320,
+        "active": 3850,
+        "rms_action_change": 0.00106314686127007,
+        "mean_absolute_action_change": 0.0008636804413981736,
+        "p99_absolute_action_change": 0.002651214599609375
+      },
+      {
+        "step": 340,
+        "active": 3844,
+        "rms_action_change": 0.0010641859844326973,
+        "mean_absolute_action_change": 0.0008662425680086017,
+        "p99_absolute_action_change": 0.00267411838285625
+      },
+      {
+        "step": 360,
+        "active": 3839,
+        "rms_action_change": 0.0010591150494292378,
+        "mean_absolute_action_change": 0.0008638830040581524,
+        "p99_absolute_action_change": 0.002635476179420948
+      },
+      {
+        "step": 380,
+        "active": 3839,
+        "rms_action_change": 0.0010551736922934651,
+        "mean_absolute_action_change": 0.0008635083213448524,
+        "p99_absolute_action_change": 0.0026388135738670826
+      },
+      {
+        "step": 400,
+        "active": 3839,
+        "rms_action_change": 0.0010495289461687207,
+        "mean_absolute_action_change": 0.0008596948464401066,
+        "p99_absolute_action_change": 0.0026053977198898792
+      },
+      {
+        "step": 420,
+        "active": 3838,
+        "rms_action_change": 0.0010438651079311967,
+        "mean_absolute_action_change": 0.0008587448974139988,
+        "p99_absolute_action_change": 0.0025808049831539392
+      },
+      {
+        "step": 440,
+        "active": 3837,
+        "rms_action_change": 0.0010397570440545678,
+        "mean_absolute_action_change": 0.0008572993683628738,
+        "p99_absolute_action_change": 0.002587121445685625
+      },
+      {
+        "step": 460,
+        "active": 3836,
+        "rms_action_change": 0.001036816625855863,
+        "mean_absolute_action_change": 0.0008571987273171544,
+        "p99_absolute_action_change": 0.0025736726820468903
+      },
+      {
+        "step": 480,
+        "active": 3835,
+        "rms_action_change": 0.0010360099840909243,
+        "mean_absolute_action_change": 0.0008569940109737217,
+        "p99_absolute_action_change": 0.0025620004162192345
+      },
+      {
+        "step": 500,
+        "active": 3834,
+        "rms_action_change": 0.001035718829371035,
+        "mean_absolute_action_change": 0.0008549128542654216,
+        "p99_absolute_action_change": 0.0025778464041650295
+      },
+      {
+        "step": 520,
+        "active": 3832,
+        "rms_action_change": 0.001041322248056531,
+        "mean_absolute_action_change": 0.0008578288834542036,
+        "p99_absolute_action_change": 0.00260133296251297
+      },
+      {
+        "step": 540,
+        "active": 3828,
+        "rms_action_change": 0.001047397730872035,
+        "mean_absolute_action_change": 0.0008586914627812803,
+        "p99_absolute_action_change": 0.0026322086341679096
+      },
+      {
+        "step": 560,
+        "active": 3824,
+        "rms_action_change": 0.0010496203321963549,
+        "mean_absolute_action_change": 0.0008599577122367918,
+        "p99_absolute_action_change": 0.0026598358526825905
+      },
+      {
+        "step": 580,
+        "active": 3813,
+        "rms_action_change": 0.0010556835914030671,
+        "mean_absolute_action_change": 0.0008659742888994515,
+        "p99_absolute_action_change": 0.0026709791272878647
+      },
+      {
+        "step": 600,
+        "active": 3800,
+        "rms_action_change": 0.0010646056616678834,
+        "mean_absolute_action_change": 0.0008667187648825347,
+        "p99_absolute_action_change": 0.002714911475777626
+      },
+      {
+        "step": 620,
+        "active": 3779,
+        "rms_action_change": 0.0010689604096114635,
+        "mean_absolute_action_change": 0.000869458366651088,
+        "p99_absolute_action_change": 0.0027060359716415405
+      },
+      {
+        "step": 640,
+        "active": 3764,
+        "rms_action_change": 0.0010723251616582274,
+        "mean_absolute_action_change": 0.0008724515209905803,
+        "p99_absolute_action_change": 0.002692936919629574
+      },
+      {
+        "step": 660,
+        "active": 3751,
+        "rms_action_change": 0.0010647816816344857,
+        "mean_absolute_action_change": 0.0008677772129885852,
+        "p99_absolute_action_change": 0.002682344987988472
+      },
+      {
+        "step": 680,
+        "active": 3740,
+        "rms_action_change": 0.001070820027962327,
+        "mean_absolute_action_change": 0.0008702997001819313,
+        "p99_absolute_action_change": 0.00269179604947567
+      },
+      {
+        "step": 700,
+        "active": 3737,
+        "rms_action_change": 0.001074825064279139,
+        "mean_absolute_action_change": 0.0008730640402063727,
+        "p99_absolute_action_change": 0.0027197846211493015
+      },
+      {
+        "step": 720,
+        "active": 3724,
+        "rms_action_change": 0.0010735399555414915,
+        "mean_absolute_action_change": 0.0008711230475455523,
+        "p99_absolute_action_change": 0.0027059661224484444
+      },
+      {
+        "step": 740,
+        "active": 3708,
+        "rms_action_change": 0.0010731513611972332,
+        "mean_absolute_action_change": 0.0008711880072951317,
+        "p99_absolute_action_change": 0.0027066650800406933
+      },
+      {
+        "step": 760,
+        "active": 3692,
+        "rms_action_change": 0.0010745058534666896,
+        "mean_absolute_action_change": 0.0008713167044334114,
+        "p99_absolute_action_change": 0.002694297581911087
+      },
+      {
+        "step": 780,
+        "active": 3666,
+        "rms_action_change": 0.0010694911470636725,
+        "mean_absolute_action_change": 0.0008713540155440569,
+        "p99_absolute_action_change": 0.002688569948077202
+      },
+      {
+        "step": 800,
+        "active": 3646,
+        "rms_action_change": 0.0010673659853637218,
+        "mean_absolute_action_change": 0.0008681931649334729,
+        "p99_absolute_action_change": 0.0027079167775809765
+      },
+      {
+        "step": 820,
+        "active": 3638,
+        "rms_action_change": 0.0011098093818873167,
+        "mean_absolute_action_change": 0.0008945717709138989,
+        "p99_absolute_action_change": 0.002857488114386797
+      },
+      {
+        "step": 840,
+        "active": 3627,
+        "rms_action_change": 0.0010782440658658743,
+        "mean_absolute_action_change": 0.0008765365346334875,
+        "p99_absolute_action_change": 0.0027100490406155586
+      },
+      {
+        "step": 860,
+        "active": 3607,
+        "rms_action_change": 0.0010723361046984792,
+        "mean_absolute_action_change": 0.0008773504523560405,
+        "p99_absolute_action_change": 0.0026730988174676895
+      },
+      {
+        "step": 880,
+        "active": 3590,
+        "rms_action_change": 0.001072719693183899,
+        "mean_absolute_action_change": 0.0008750026463530958,
+        "p99_absolute_action_change": 0.002707867417484522
+      },
+      {
+        "step": 900,
+        "active": 3586,
+        "rms_action_change": 0.0010647188173606992,
+        "mean_absolute_action_change": 0.0008704450447112322,
+        "p99_absolute_action_change": 0.002702992642298341
+      },
+      {
+        "step": 920,
+        "active": 3584,
+        "rms_action_change": 0.0010628261370584369,
+        "mean_absolute_action_change": 0.0008713851566426456,
+        "p99_absolute_action_change": 0.0026334375143051147
+      },
+      {
+        "step": 940,
+        "active": 3580,
+        "rms_action_change": 0.0010665591107681394,
+        "mean_absolute_action_change": 0.0008736887248232961,
+        "p99_absolute_action_change": 0.0026690377853810787
+      },
+      {
+        "step": 960,
+        "active": 3575,
+        "rms_action_change": 0.0010666449088603258,
+        "mean_absolute_action_change": 0.0008725174702703953,
+        "p99_absolute_action_change": 0.002697473391890526
+      },
+      {
+        "step": 980,
+        "active": 3573,
+        "rms_action_change": 0.0010644425638020039,
+        "mean_absolute_action_change": 0.0008712969138287008,
+        "p99_absolute_action_change": 0.002668038010597229
+      }
+    ]
+  },
+  "advantage_scale": {
+    "reward_adv_std": 0.0863146260380745,
+    "cost_adv_std": 0.0030096331611275673,
+    "reward_adv_mean": 0.1278790384531021,
+    "cost_adv_mean": 2.68097883235896e-05,
+    "final_lowbin_lambda_mean": 0.3948236405849457,
+    "lambda_cost_adv_std_over_reward_adv_std": 0.013766778309129224,
+    "samples": 3820245
+  },
+  "cost_critic_calibration_state_after_first_action": {
+    "samples": 4096,
+    "prediction_mean": 0.09421012550592422,
+    "discounted_MC_target_mean": 0.09525643289089203,
+    "bias": -0.001046300632879138,
+    "MAE": 0.004286232870072126,
+    "RMSE": 0.006582282949239016,
+    "note": "Future discounted sampled costs, physical failure truncation, and timeout/horizon Vc tail bootstrap. The 1000-step horizon tail is tiny for survivors."
+  }
+}

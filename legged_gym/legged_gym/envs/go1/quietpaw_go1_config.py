@@ -24,10 +24,12 @@ class QuietPawGo1CfgPPO(Go1RoughCfgPPO):
 class QuietPawStage1Go1Cfg(QuietPawGo1Cfg):
     class noise_cost:
         # Explicit reproduction assumptions; not verified author code.
-        definition = "normalized_complement_v1"
+        definition = "normalized_complement_v2"
         sigma_force = 50.0
         sigma_velocity = 0.5
         contact_threshold = 1.0
+        force_weight = 0.2
+        impact_weight = 0.8
 
 
 class QuietPawStage1Go1CfgPPO(QuietPawGo1CfgPPO):
@@ -40,6 +42,9 @@ class QuietPawStage1Go1CfgPPO(QuietPawGo1CfgPPO):
         cost_value_loss_coef = 1.0
         epsilon_seed = 1
         epsilon_bins = 8
+        # epsilon itself is the actual normalized discounted cost budget.
+        epsilon_min = 0.2
+        epsilon_max = 1.0
 
         class pid:
             # QuietPaw specifies PID but does not report its gains.

@@ -1,9 +1,18 @@
 """Seeded stratification of the complete epsilon grid over joint cohorts."""
 
+import math
+
 import torch
 
 
-def balanced_assignment(terrain, command, seed, bins=8):
+def validate_epsilon_range(minimum, maximum):
+    if not (math.isfinite(minimum) and math.isfinite(maximum)
+            and 0 <= minimum < maximum <= 1):
+        raise ValueError("epsilon range must satisfy 0 <= minimum < maximum <= 1")
+
+
+def balanced_assignment(terrain, command, seed, bins=8, minimum=0.0, maximum=1.0):
+    validate_epsilon_range(minimum, maximum)
     terrain, command = terrain.cpu().long(), command.cpu().long()
     count = len(terrain)
     if bins < 2 or count < bins or command.shape != terrain.shape:
@@ -22,7 +31,7 @@ def balanced_assignment(terrain, command, seed, bins=8):
         labels[ids] = torch.arange(offset, offset + len(ids)) % bins
         offset += len(ids)
     epsilon = torch.empty(count)
-    grid = torch.linspace(0., 1., count)
+    grid = torch.linspace(minimum, maximum, count)
     # Cyclic labels and tensor_split have identical global bin counts.
     for label, values in enumerate(torch.tensor_split(grid, bins)):
         ids = (labels == label).nonzero().flatten()

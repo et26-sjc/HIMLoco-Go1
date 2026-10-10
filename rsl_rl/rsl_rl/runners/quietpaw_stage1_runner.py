@@ -16,20 +16,29 @@ class QuietPawStage1Runner(QuietPawRunner):
         if train_cfg.get("quietpaw", {}).get("stage") != 1:
             raise ValueError("QuietPawStage1Runner requires stage=1")
         self.contract = {
-            "version": 2,
+            "version": 3,
             "reward_bootstrap": "terminal_critic_observation",
             "epsilon_assignment": "joint_cohort_stratified_full_grid_v1",
-            "noise_definition": "normalized_complement_v1",
+            "noise_definition": "normalized_complement_v2",
             "budget": "normalized_discounted_episode_return",
+            "epsilon_semantics": "absolute_cost_budget",
+            "epsilon_range": {
+                "minimum": train_cfg["algorithm"]["epsilon_min"],
+                "maximum": train_cfg["algorithm"]["epsilon_max"],
+            },
             "sampling": "policy_step_pre_reset",
             "algorithm": train_cfg["algorithm"],
         }
+        fixed = train_cfg["algorithm"].get("epsilon_fixed")
+        if fixed is not None:
+            self.contract["epsilon_assignment"] = "fixed_budget_v1"
+            self.contract["epsilon_range"] = {"minimum": fixed, "maximum": fixed}
         noise_cfg = getattr(env.cfg, "noise_cost", None)
         if noise_cfg is None or noise_cfg.definition != self.contract["noise_definition"]:
             raise ValueError("Stage 1 requires the QuietPaw noise measurement environment")
         self.contract["noise_parameters"] = {
             name: getattr(noise_cfg, name) for name in
-            ("sigma_force", "sigma_velocity", "contact_threshold")}
+            ("sigma_force", "sigma_velocity", "contact_threshold", "force_weight", "impact_weight")}
         # Bypass the Stage 0 guard, while retaining its class-selection extension.
         HIMOnPolicyRunner.__init__(self, env, train_cfg, *args, **kwargs)
         terrain = getattr(env, "terrain_types", torch.zeros(env.num_envs, dtype=torch.long))
@@ -41,8 +50,8 @@ class QuietPawStage1Runner(QuietPawRunner):
             (Path(self.log_dir) / "epsilon_assignment.json").write_text(
                 json.dumps(self.alg.assignment, indent=2))
         print("QuietPaw Stage 1 uses documented reproduction assumptions: "
-              "normalized_complement_v1, discounted cost budget, per-env PID. "
-              "No value decomposition; see docs/quietpaw_stage1.md.")
+              "normalized_complement_v2, velocity-weighted cost, direct epsilon budget, per-env PID. "
+              "No value decomposition; see docs/quietpaw_budget_velocity.md.")
 
     def _resolve_policy_class(self, name):
         if name == "QuietPawConditionalActorCritic":
@@ -89,7 +98,7 @@ class QuietPawStage1Runner(QuietPawRunner):
         if saved["contract"] != self.contract:
             raise ValueError("QuietPaw checkpoint contract mismatch (cost/budget/algorithm)")
         if load_optimizer and not torch.equal(saved["pid"]["epsilon"].to(self.alg.epsilon), self.alg.epsilon):
-            raise ValueError("Training resume requires the same number of environments/epsilon grid")
+            raise ValueError("Training resume requires the same environment count and epsilon grid")
         if load_optimizer and saved["assignment"] != self.alg.assignment:
             raise ValueError("Training resume requires identical terrain/command/epsilon mapping")
         self.alg.actor_critic.load_state_dict(state["model_state_dict"])

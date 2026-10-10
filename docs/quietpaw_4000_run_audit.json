@@ -1,0 +1,129 @@
+{
+  "run_directory": "legged_gym/logs/test/quietpaw_go1_stage1/Oct01_04-05-46_him7500_cmdp_4000_seed4",
+  "recorded_updates": 59,
+  "iteration_range": [
+    0,
+    58
+  ],
+  "recorded_transitions": 24166400,
+  "planned_iterations": 4000,
+  "planned_transitions": 1638400000,
+  "scalar_nonfinite_tags": [],
+  "scalars": {
+    "Train/mean_reward": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 1.3815717697143555,
+      "last_value": 12.378445625305176,
+      "minimum": -3.5243241786956787,
+      "maximum": 12.558575630187988
+    },
+    "Train/mean_episode_length": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 88.0,
+      "last_value": 956.780029296875,
+      "minimum": 88.0,
+      "maximum": 1001.27001953125
+    },
+    "QuietPaw/noise_cost_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.09503357857465744,
+      "last_value": 0.08986738324165344,
+      "minimum": 0.07254896312952042,
+      "maximum": 0.09503357857465744
+    },
+    "QuietPaw/completed_cost_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.03799548000097275,
+      "last_value": 0.0913800299167633,
+      "minimum": 0.03799548000097275,
+      "maximum": 0.09169447422027588
+    },
+    "QuietPaw/lambda_used_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.0,
+      "last_value": 0.0,
+      "minimum": 0.0,
+      "maximum": 0.0
+    },
+    "QuietPaw/lambda_next_max": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.0,
+      "last_value": 0.0,
+      "minimum": 0.0,
+      "maximum": 0.0
+    },
+    "QuietPaw/budget_violation_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.0,
+      "last_value": 0.0,
+      "minimum": 0.0,
+      "maximum": 0.0
+    },
+    "QuietPaw/cost_value_loss": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.0033182725310325623,
+      "last_value": 7.241500952659408e-06,
+      "minimum": 7.241500952659408e-06,
+      "maximum": 0.0033182725310325623
+    },
+    "QuietPaw/epsilon_bin_0/noise_force_cost_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.06188815087080002,
+      "last_value": 0.05803292244672775,
+      "minimum": 0.0441121943295002,
+      "maximum": 0.06188815087080002
+    },
+    "QuietPaw/epsilon_bin_0/noise_impact_cost_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.033315710723400116,
+      "last_value": 0.03114832378923893,
+      "minimum": 0.028073357418179512,
+      "maximum": 0.033315710723400116
+    },
+    "QuietPaw/epsilon_bin_0/velocity_tracking_error_mean": {
+      "count": 59,
+      "first_step": 0,
+      "last_step": 58,
+      "first_value": 0.20814524590969086,
+      "last_value": 0.2791697680950165,
+      "minimum": 0.20814524590969086,
+      "maximum": 0.6670870184898376
+    }
+  },
+  "checkpoints": {
+    "model_him_init.pt": {
+      "internal_iter": 0,
+      "finite_weights": true,
+      "finite_cpu_outputs": true,
+      "same_history_epsilon_action_rms": 0.0
+    },
+    "model_0.pt": {
+      "internal_iter": 1,
+      "finite_weights": true,
+      "finite_cpu_outputs": true,
+      "same_history_epsilon_action_rms": 0.007975088432431221
+    }
+  },
+  "error_observed": "W&B file paths under original logs/quietpaw_go1_stage1 ceased to exist; current files are under logs/test/quietpaw_go1_stage1. Full terminal traceback still needed.",
+  "behavioral_limit": "No final trained checkpoint found; no final-policy simulator evaluation performed."
+}

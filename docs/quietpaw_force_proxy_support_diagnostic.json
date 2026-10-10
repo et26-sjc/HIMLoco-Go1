@@ -1,0 +1,25 @@
+{
+  "description": "Analytical fixed total support-force example, no touchdown; not a robot rollout",
+  "assumed_body_mass_kg": 13,
+  "total_force_N": 127.53,
+  "contact_counts": [
+    4,
+    2,
+    1
+  ],
+  "force_cost": [
+    0.09429340064525604,
+    0.07206528633832932,
+    0.0460982583463192
+  ],
+  "impact_cost": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "fz_peak_N": [
+    31.88249969482422,
+    63.76499938964844,
+    127.52999877929688
+  ]
+}

@@ -1,16 +1,20 @@
 """Stage 1 PPO-Lagrangian with separate cost GAE and intact HIM updates."""
 
+import math
 import torch
 from torch import nn
 
 from .quietpaw_him_ppo import QuietPawHIMPPO
 from .quietpaw_pid import QuietPawPID
-from .quietpaw_assignment import balanced_assignment
+from .quietpaw_assignment import balanced_assignment, validate_epsilon_range
 from rsl_rl.storage.quietpaw_cmdp_storage import QuietPawCMDPStorage
+from rsl_rl.utils.quietpaw_diagnostics import advantage_diagnostics, actor_gradient_diagnostics
 
 
 class QuietPawConstrainedPPO(QuietPawHIMPPO):
-    def __init__(self, *args, cost_value_loss_coef=1.0, pid=None, epsilon_seed=1, epsilon_bins=8, **kwargs):
+    def __init__(self, *args, cost_value_loss_coef=1.0, pid=None, epsilon_seed=1, epsilon_bins=8,
+                 epsilon_min=0.2, epsilon_max=1.0, epsilon_fixed=None,
+                 diagnostics_interval=0, **kwargs):
         super().__init__(*args, **kwargs)
         if not 0 < self.gamma < 1:
             raise ValueError("Normalized discounted cost requires 0 < gamma < 1")
@@ -19,6 +23,25 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         self.iterations = 0
         self.diagnostics = {}
         self.epsilon_seed, self.epsilon_bins = epsilon_seed, epsilon_bins
+        if epsilon_fixed is None:
+            validate_epsilon_range(epsilon_min, epsilon_max)
+        elif not math.isfinite(epsilon_fixed) or not 0 <= epsilon_fixed <= 1:
+            raise ValueError("Fixed epsilon must be finite and within [0,1]")
+        if not isinstance(diagnostics_interval, int) or diagnostics_interval < 0:
+            raise ValueError("diagnostics_interval must be a nonnegative integer")
+        self.epsilon_fixed = epsilon_fixed
+        self.diagnostics_interval = diagnostics_interval
+        if epsilon_fixed is not None:
+            epsilon_min = epsilon_max = epsilon_fixed
+        self.epsilon_min, self.epsilon_max = epsilon_min, epsilon_max
+
+    def _assignment(self, terrain, command, standalone=False):
+        if self.epsilon_fixed is not None:
+            return (torch.full((len(terrain), 1), self.epsilon_fixed),
+                    torch.zeros(len(terrain), dtype=torch.long))
+        return balanced_assignment(terrain, command, self.epsilon_seed,
+                                   min(self.epsilon_bins, len(terrain)) if standalone else self.epsilon_bins,
+                                   self.epsilon_min, self.epsilon_max)
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape,
                      critic_obs_shape, action_shape):
@@ -29,9 +52,8 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         self.transition = QuietPawCMDPStorage.Transition()
         # Single-cohort initialization for standalone algorithm tests. The runner
         # replaces this with the actual joint terrain/command stratification.
-        self.epsilon, self.epsilon_labels = balanced_assignment(
-            torch.zeros(num_envs), torch.zeros(num_envs), self.epsilon_seed,
-            min(self.epsilon_bins, num_envs))
+        self.epsilon, self.epsilon_labels = self._assignment(
+            torch.zeros(num_envs), torch.zeros(num_envs), standalone=True)
         self.epsilon = self.epsilon.to(self.device)
         self.epsilon_labels = self.epsilon_labels.to(self.device)
         self.pid = QuietPawPID(self.epsilon, **self.pid_cfg)
@@ -44,13 +66,16 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         self.success_count = torch.zeros_like(self.epsilon)
 
     def configure_assignment(self, terrain, command):
-        epsilon, labels = balanced_assignment(terrain, command, self.epsilon_seed, self.epsilon_bins)
+        epsilon, labels = self._assignment(terrain, command)
         self.epsilon.copy_(epsilon.to(self.device))
         self.epsilon_labels = labels.to(self.device)
         self.pid = QuietPawPID(self.epsilon, **self.pid_cfg)
-        self.assignment = dict(seed=self.epsilon_seed, bins=self.epsilon_bins,
+        self.assignment = dict(seed=self.epsilon_seed, bins=1 if self.epsilon_fixed is not None else self.epsilon_bins,
                                terrain=terrain.cpu().tolist(), command=command.cpu().tolist(),
-                               epsilon=epsilon.flatten().tolist(), labels=labels.tolist())
+                               epsilon=epsilon.flatten().tolist(), labels=labels.tolist(),
+                               epsilon_min=self.epsilon_min, epsilon_max=self.epsilon_max)
+        if self.epsilon_fixed is not None:
+            self.assignment.update(mode="fixed_budget_v1", epsilon_fixed=self.epsilon_fixed)
 
     def act(self, obs, critic_obs):
         ac, tr = self.actor_critic, self.transition
@@ -132,6 +157,20 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
         # epsilon inputs, combined advantages and the additional cost critic.
         totals = torch.zeros(5, device=self.device)
         updates = 0
+        probe = {}
+        if self.diagnostics_interval:
+            probe.update(advantage_diagnostics(self.storage, self.lambda_used, self.epsilon_labels))
+            if self.iterations % self.diagnostics_interval == 0:
+                probe.update(actor_gradient_diagnostics(
+                    self.actor_critic, self.storage, self.lambda_used, self.epsilon_labels))
+            labels = self.epsilon_labels.unique().tolist()
+            boundaries = torch.stack([
+                (self.epsilon[self.epsilon_labels == left].max() +
+                 self.epsilon[self.epsilon_labels == right].min()) / 2
+                for left, right in zip(labels[:-1], labels[1:])
+            ]) if len(labels) > 1 else torch.empty(0, device=self.device)
+            clipped_samples = torch.zeros(len(labels), device=self.device)
+            total_samples = torch.zeros_like(clipped_samples)
         for batch in self.storage.cmdp_mini_batch_generator(self.num_mini_batches, self.num_learning_epochs):
             ac = self.actor_critic
             ac.act(batch["observations"], batch["epsilon"])
@@ -139,6 +178,13 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
             value = ac.evaluate(batch["critic"], batch["epsilon"])
             cost_value = ac.evaluate_cost(batch["critic"], batch["epsilon"])
             mu, sigma, entropy = ac.action_mean, ac.action_std, ac.entropy
+            if self.diagnostics_interval:
+                with torch.no_grad():
+                    condition = torch.bucketize(batch["epsilon"].flatten().contiguous(), boundaries)
+                    ratio = (log_prob - batch["log_prob"].flatten()).exp()
+                    clipped_samples += torch.bincount(condition, weights=(
+                        (ratio - 1).abs() > self.clip_param).float(), minlength=len(labels))
+                    total_samples += torch.bincount(condition, minlength=len(labels))
             if self.desired_kl is not None and self.schedule == "adaptive":
                 with torch.no_grad():
                     kl = torch.sum(torch.log(sigma / batch["sigma"] + 1.e-5) +
@@ -190,15 +236,26 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
             "lambda_next_max": self.pid.multiplier.max().item(),
             "pid_envs_updated": valid.sum().item(),
             "completed_episodes": self.completed_count.sum().item(),
+            "cost_budget_min": self.epsilon.min().item(),
+            "cost_budget_max": self.epsilon.max().item(),
+            "completed_cost_mean": measured_cost[valid].mean().item() if valid.any() else 0.,
             "budget_violation_mean": ((measured_cost - self.epsilon)[valid].clamp_min(0).mean().item()
                                       if valid.any() else 0.),
             "him_updates": updates,
         }
+        self.diagnostics.update(probe)
+        if self.diagnostics_interval:
+            for label in labels:
+                self.diagnostics["epsilon_bin_{}/ppo_clip_fraction".format(label)] = (
+                    clipped_samples[label] / total_samples[label].clamp_min(1)).item()
         for label in self.epsilon_labels.unique().tolist():
             mask = self.epsilon_labels == label
             prefix = "epsilon_bin_{}/".format(label)
             self.diagnostics[prefix + "epsilon_min"] = self.epsilon[mask].min().item()
             self.diagnostics[prefix + "epsilon_max"] = self.epsilon[mask].max().item()
+            self.diagnostics[prefix + "cost_budget_mean"] = self.epsilon[mask].mean().item()
+            self.diagnostics[prefix + "cost_budget_min"] = self.epsilon[mask].min().item()
+            self.diagnostics[prefix + "cost_budget_max"] = self.epsilon[mask].max().item()
             for name, total in self.metric_sums.items():
                 self.diagnostics[prefix + name + "_mean"] = (total[mask].mean() / self.metric_steps).item()
             episodes = self.completed_count[mask].sum()
@@ -208,6 +265,7 @@ class QuietPawConstrainedPPO(QuietPawHIMPPO):
                 self.diagnostics[prefix + "timeout_success_rate"] = (self.success_count[mask].sum() / episodes).item()
             observed = valid.squeeze(-1) & mask
             if observed.any():
+                self.diagnostics[prefix + "completed_cost_mean"] = measured_cost[observed].mean().item()
                 self.diagnostics[prefix + "budget_violation"] = (measured_cost - self.epsilon)[observed].clamp_min(0).mean().item()
         self.metric_sums.clear()
         self.metric_steps = 0

@@ -1,0 +1,75 @@
+{
+  "baseline_checkpoint": "legged_gym/logs/rough_go1/Sep29_01-01-22_baseline_seed1/model_7500.pt",
+  "baseline_sha256": "2de4c315944b5db672c3af79c09a0d25867e37ba4c4e3c03ba503b322a3143a9",
+  "moved_directories": [
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_cmdp_eval100",
+      "to": "legged_gym/logs/test/quietpaw_him7500_cmdp_eval100"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_cmdp_eval1000_seed11",
+      "to": "legged_gym/logs/test/quietpaw_him7500_cmdp_eval1000_seed11"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_cmdp_eval1000_seed12",
+      "to": "legged_gym/logs/test/quietpaw_him7500_cmdp_eval1000_seed12"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_cmdp_eval300",
+      "to": "legged_gym/logs/test/quietpaw_him7500_cmdp_eval300"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_cmdp_eval500",
+      "to": "legged_gym/logs/test/quietpaw_him7500_cmdp_eval500"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_warmstart_init_eval",
+      "to": "legged_gym/logs/test/quietpaw_him7500_warmstart_init_eval"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_him7500_warmstart_init_eval_seed12",
+      "to": "legged_gym/logs/test/quietpaw_him7500_warmstart_init_eval_seed12"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_large_eval_4096_cmd0",
+      "to": "legged_gym/logs/test/quietpaw_large_eval_4096_cmd0"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_large_eval_4096_cmd05",
+      "to": "legged_gym/logs/test/quietpaw_large_eval_4096_cmd05"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_large_eval_4096_seed4",
+      "to": "legged_gym/logs/test/quietpaw_large_eval_4096_seed4"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_large_eval_4096_seed5_cmd1",
+      "to": "legged_gym/logs/test/quietpaw_large_eval_4096_seed5_cmd1"
+    },
+    {
+      "from": "legged_gym/logs/quietpaw_large_eval_seed1",
+      "to": "legged_gym/logs/test/quietpaw_large_eval_seed1"
+    },
+    {
+      "from": "legged_gym/logs/rough_go1/Sep29_17-50-00_stage0_before",
+      "to": "legged_gym/logs/test/rough_go1/Sep29_17-50-00_stage0_before"
+    },
+    {
+      "from": "legged_gym/logs/rough_go1/Sep29_17-57-11_stage0_after",
+      "to": "legged_gym/logs/test/rough_go1/Sep29_17-57-11_stage0_after"
+    },
+    {
+      "from": "legged_gym/logs/rough_go1/Sep29_18-28-43_stage1_baseline_regression",
+      "to": "legged_gym/logs/test/rough_go1/Sep29_18-28-43_stage1_baseline_regression"
+    },
+    {
+      "from": "legged_gym/logs/rough_go1/Sep29_22-29-50_correction_baseline",
+      "to": "legged_gym/logs/test/rough_go1/Sep29_22-29-50_correction_baseline"
+    }
+  ],
+  "preserved": [
+    "legged_gym/logs/rough_go1/Sep29_01-01-22_baseline_seed1",
+    "legged_gym/logs/rough_go1/exported"
+  ],
+  "training_started": false
+}

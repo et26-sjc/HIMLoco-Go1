@@ -40,6 +40,8 @@ class CorrectionTests(unittest.TestCase):
                   torch.tensor([False, False]), torch.tensor([[9.], [.6]]), last_step=True)
         result = stats.summary()
         self.assertAlmostEqual(result["locomotion_reward"], 3.5)
+        self.assertAlmostEqual(result["observed_discounted_reward"], 2.5)
+        self.assertEqual(stats.episodes()["observed_discounted_reward"], [1., 4.])
         self.assertAlmostEqual(result["noise_cost"], .5)
         self.assertAlmostEqual(result["survival_success_rate"], .5)
         self.assertAlmostEqual(result["fz_peak_max"], 30.)
