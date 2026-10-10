@@ -93,6 +93,7 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.delay:
             for i in range(self.cfg.control.decimation):
                 self.delayed_actions[:, i] = self.last_actions + (self.actions - self.last_actions) * (i >= delay_steps)
+        self._begin_control_step()
         # step physics and render each frame
         self.render()
         for _ in range(self.cfg.control.decimation):
@@ -102,6 +103,7 @@ class LeggedRobot(BaseTask):
             if self.device == 'cpu':
                 self.gym.fetch_results(self.sim, True)
             self.gym.refresh_dof_state_tensor(self.sim)
+            self._after_physics_substep(_)
         termination_ids, termination_priveleged_obs = self.post_physics_step()
 
         # return clipped obs, clipped states (None), rewards, dones and infos
@@ -110,6 +112,14 @@ class LeggedRobot(BaseTask):
         if self.privileged_obs_buf is not None:
             self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
         return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.reset_buf, self.extras, termination_ids, termination_priveleged_obs
+
+    def _begin_control_step(self):
+        """Optional measurement hook. The baseline does not collect substep data."""
+        pass
+
+    def _after_physics_substep(self, substep):
+        """Optional hook after simulation and DOF-state refresh."""
+        pass
 
     def post_physics_step(self):
         """ check terminations, compute observations and rewards
@@ -934,7 +944,7 @@ class LeggedRobot(BaseTask):
             Default behaviour: draws height measurement points
         """
         # draw height lines
-        if not self.terrain.cfg.measure_heights:
+        if not self.cfg.terrain.measure_heights:
             return
         self.gym.clear_lines(self.viewer)
         self.gym.refresh_rigid_body_state_tensor(self.sim)

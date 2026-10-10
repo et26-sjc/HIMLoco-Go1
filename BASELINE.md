@@ -4,16 +4,23 @@ This branch is a cleanup of `prime` for new Go1 locomotion experiments. The goal
 
 ## Baseline invariants
 
-The following core files remain unchanged from the released HIMLoco implementation:
+The following network, storage and task definitions remain unchanged:
 
 - `rsl_rl/rsl_rl/modules/him_estimator.py`
 - `rsl_rl/rsl_rl/modules/him_actor_critic.py`
 - `rsl_rl/rsl_rl/storage/him_rollout_storage.py`
-- the PPO/HIM optimization math in `rsl_rl/rsl_rl/algorithms/him_ppo.py`
-- `legged_gym/legged_gym/envs/base/legged_robot.py`
 - `legged_gym/legged_gym/envs/go1/go1_config.py`
 
-The only HIMPPO change in this cleanup is that the iteration-level W&B/TensorBoard values for estimation loss and swap loss now return the average over all PPO minibatch updates instead of the final minibatch value.
+The default PPO/HIM optimization math is retained. Estimation loss and swap loss
+are reported as averages over minibatch updates. Quiet V1 adds an optional
+estimator-update flag (default: enabled), filters the optimizer to trainable
+parameters, and records PPO diagnostics. The base robot adds inactive substep
+measurement hooks and a plane-terrain debug fix. Terrain generation can accept
+fixed evaluation settings; normal generation follows the original path.
+
+The separate `go1_quiet` task and entrypoints implement the quiet experiment.
+They freeze the original actor and estimator. See [QUIET_V1.md](QUIET_V1.md) for
+the architecture, validation gates and experiment commands.
 
 ## Intentional cleanup changes
 

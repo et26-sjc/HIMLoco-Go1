@@ -52,6 +52,7 @@ class HIMPPO:
                  schedule="fixed",
                  desired_kl=0.01,
                  device='cpu',
+                 update_estimator=True,
                  ):
 
         self.device = device
@@ -64,7 +65,10 @@ class HIMPPO:
         self.actor_critic = actor_critic
         self.actor_critic.to(self.device)
         self.storage = None # initialized later
-        self.optimizer = optim.Adam(self.actor_critic.parameters(), lr=learning_rate)
+        self.trainable_parameters = [p for p in self.actor_critic.parameters() if p.requires_grad]
+        self.optimizer = optim.Adam(self.trainable_parameters, lr=learning_rate)
+        self.update_estimator = update_estimator
+        self.last_update_metrics = {}
         self.transition = HIMRolloutStorage.Transition()
 
         # PPO parameters
@@ -150,7 +154,9 @@ class HIMPPO:
                             param_group['lr'] = self.learning_rate
 
                 #Estimator Update
-                estimation_loss, swap_loss = self.actor_critic.estimator.update(obs_batch, next_critic_obs_batch, lr=self.learning_rate)
+                estimation_loss, swap_loss = 0.0, 0.0
+                if self.update_estimator:
+                    estimation_loss, swap_loss = self.actor_critic.estimator.update(obs_batch, next_critic_obs_batch, lr=self.learning_rate)
 
                 # Surrogate loss
                 ratio = torch.exp(actions_log_prob_batch - torch.squeeze(old_actions_log_prob_batch))
@@ -174,8 +180,17 @@ class HIMPPO:
                 # Gradient step
                 self.optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+                grad_norm = nn.utils.clip_grad_norm_(self.trainable_parameters, self.max_grad_norm)
                 self.optimizer.step()
+                with torch.no_grad():
+                    kl = torch.sum(torch.log(sigma_batch / old_sigma_batch + 1.e-5)
+                        + (old_sigma_batch.square() + (old_mu_batch - mu_batch).square())
+                        / (2.0 * sigma_batch.square()) - 0.5, dim=-1).mean()
+                    self.last_update_metrics = {
+                        'kl': kl.item(), 'gradient_norm': grad_norm.item(),
+                        'std_mean': sigma_batch.mean().item(),
+                        'clip_fraction': ((ratio - 1.0).abs() > self.clip_param).float().mean().item(),
+                    }
 
                 mean_value_loss += value_loss.item()
                 mean_surrogate_loss += surrogate_loss.item()

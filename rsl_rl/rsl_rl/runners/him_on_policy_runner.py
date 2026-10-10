@@ -38,7 +38,7 @@ import torch
 import wandb
 
 from rsl_rl.algorithms import PPO, HIMPPO
-from rsl_rl.modules import HIMActorCritic
+from rsl_rl.modules import HIMActorCritic, QuietHIMActorCritic
 from rsl_rl.env import VecEnv
 
 
