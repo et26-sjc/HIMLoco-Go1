@@ -1,0 +1,6 @@
+# Deployment only. Install a target-compatible CPU Torch runtime separately.
+# Use Python >= 3.7 and PyTorch >= 1.10, then run deploy_policy.py --check with
+# the actual exported policy on that machine; version numbers alone do not
+# establish TorchScript compatibility. The original WTW Dockerfile uses 1.9.
+numpy>=1.19
+lcm>=1.4

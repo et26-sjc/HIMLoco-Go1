@@ -1,5 +1,12 @@
 ## Learning-based Locomotion Control from OpenRobotLab
 This repository contains learning-based locomotion control research from OpenRobotLab, currently including [Hybrid Internal Model](/projects/himloco/README.md) & [H-Infinity Locomotion Control](/projects/h_infinity/README.md).
+
+## Go1 deployment baseline
+
+The current Go1 deployment snapshot is [him_go1_gym_deploy_20261026/him_go1_gym_deploy](him_go1_gym_deploy_20261026/him_go1_gym_deploy/README.md), exported from the robot deployment baseline `20261025_forward_trial_3`. It includes the policy, configuration, SDK/LCM bridge source, startup scripts, and recorded walking evidence. Its README is the deployment entry point.
+
+See the [comparison with this project's Go1 implementation](docs/GO1_DEPLOYMENT_AUDIT_20261026.md) and [recommendations for deploying Isaac Lab policies](docs/GO1_LAB_DEPLOYMENT_MIGRATION.md).
+
 ## 🔥 News
 - [2024-04] Code of HIMLoco is released.
 - [2024-04] We release the [paper](https://arxiv.org/abs/2404.14405) of H-Infinity Locomotion Control. Please check the :point_right: [webpage](https://junfeng-long.github.io/HINF/) :point_left: and view our demos! :sparkler:

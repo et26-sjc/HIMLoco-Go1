@@ -160,6 +160,11 @@ def get_args():
         {"name": "--run_name", "type": str,  "help": "Name of the run. Overrides config file if provided."},
         {"name": "--load_run", "type": str,  "help": "Name of the run to load when resume=True. If -1: will load the last run. Overrides config file if provided."},
         {"name": "--checkpoint", "type": int,  "help": "Saved model checkpoint number. If -1: will load the last checkpoint. Overrides config file if provided."},
+        {"name": "--jit_policy", "type": str, "default": None, "help": "Load a TorchScript policy directly instead of restoring a training checkpoint."},
+        {"name": "--play_steps", "type": int, "default": 0, "help": "Stop playback after this many steps (0 keeps the default duration)."},
+        {"name": "--lab_native_io", "action": "store_true", "default": False, "help": "Adapt legacy Gym observations/actions to the native Isaac Lab Go1 joint/command convention for a Lab JIT policy."},
+        {"name": "--frame_path", "type": str, "default": None, "help": "Save the final Isaac Gym viewer frame to this image path."},
+        {"name": "--follow_camera", "action": "store_true", "default": False, "help": "Track the first robot with the viewer camera during playback."},
         
         {"name": "--headless", "action": "store_true", "default": False, "help": "Force display off at all times"},
         {"name": "--horovod", "action": "store_true", "default": False, "help": "Use horovod for multi-gpu training"},

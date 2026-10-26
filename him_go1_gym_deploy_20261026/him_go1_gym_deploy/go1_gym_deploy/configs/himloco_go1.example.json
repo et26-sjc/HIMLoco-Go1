@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source_commit": "ef289acaa62795009363b7b819c9186690630441",
+  "model": {
+    "path": "../models/policy.pt",
+    "sha256": null,
+    "training_dof_names": null,
+    "training_config_reference": null
+  },
+  "alignment": {
+    "attitude_source": "rpy",
+    "sensor_to_body_rotation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    "verified": false,
+    "verification_reference": null,
+    "joint_mapping_verified": false,
+    "joint_mapping_reference": null
+  },
+  "runtime": {
+    "policy_dt": 0.02,
+    "state_timeout_s": 0.05,
+    "command_timeout_s": 0.1,
+    "rc_timeout_s": 0.1,
+    "calibration_duration_s": 3.0,
+    "startup_joint_margin_rad": 0.2,
+    "calibration_gain_ramp_s": 0.5,
+    "calibration_target_inset_rad": 0.001,
+    "history_warmup_frames": 6,
+    "action_ramp_s": 1.0,
+    "max_abs_command": [0.5, 0.3, 0.5],
+    "command_axis_signs": [1, 1, -1],
+    "command_deadzone": 0.05,
+    "max_tilt_rad": 0.7,
+    "max_joint_target_step_rad": 0.08,
+    "max_tracking_error_rad": 1.0,
+    "calibration_tolerance_rad": 0.15,
+    "calibration_settle_timeout_s": 5.0,
+    "max_cycle_lateness_s": 0.04,
+    "startup_timeout_s": 10.0,
+    "ready_timeout_s": 60.0,
+    "safety_reviewed": false,
+    "safety_review_reference": null,
+    "lcm_url": "udpm://239.255.76.67:7667?ttl=255"
+  }
+}

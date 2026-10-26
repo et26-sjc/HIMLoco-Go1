@@ -1,0 +1,62 @@
+{
+  "source_log": "/home/sjc/HIMLoco_WTW_deploy/HIMLoco_WTW_deploy/audit/20261025_fixes/him_forward_20261025_190717_19075.jsonl",
+  "training_reference_commit": "c59f76349c4718da19aa9b055a830ac1a383f038",
+  "running_frames": 3508,
+  "running_s": 70.1400005989999,
+  "new_log_available": false,
+  "caution": "Forward kinematics describes joint and foot positions relative to the body under recorded IMU orientation. It does not measure body-to-ground height or establish foot/knee ground contact. Same-cycle target versus state includes dynamic response delay. Training reference is the user-specified default; actual checkpoint training metadata is unavailable.",
+  "legs": {
+    "FL": {
+      "forward_frames": 1285,
+      "forward_calf_target_median_rad": -1.8257026672363281,
+      "forward_calf_actual_median_rad": -2.0644028186798096,
+      "forward_calf_mean_actual_minus_target_rad": -0.19594775201745535,
+      "forward_calf_mae_rad": 0.21933656286172828,
+      "forward_body_to_foot_vertical_depth_target_median_m": 0.24455622495904286,
+      "forward_body_to_foot_vertical_depth_actual_median_m": 0.19563533225372706,
+      "forward_knee_below_own_foot_fraction_actual": 0.0
+    },
+    "FR": {
+      "forward_frames": 1285,
+      "forward_calf_target_median_rad": -1.9586137533187866,
+      "forward_calf_actual_median_rad": -2.0336811542510986,
+      "forward_calf_mean_actual_minus_target_rad": -0.08725916068377662,
+      "forward_calf_mae_rad": 0.10036464665186544,
+      "forward_body_to_foot_vertical_depth_target_median_m": 0.2065499072487965,
+      "forward_body_to_foot_vertical_depth_actual_median_m": 0.18835512367426177,
+      "forward_knee_below_own_foot_fraction_actual": 0.09416342412451362
+    },
+    "RL": {
+      "forward_frames": 1285,
+      "forward_calf_target_median_rad": -2.261293411254883,
+      "forward_calf_actual_median_rad": -2.277879476547241,
+      "forward_calf_mean_actual_minus_target_rad": -0.08070495221401466,
+      "forward_calf_mae_rad": 0.09429794016515235,
+      "forward_body_to_foot_vertical_depth_target_median_m": 0.18186672423151085,
+      "forward_body_to_foot_vertical_depth_actual_median_m": 0.18131042670146352,
+      "forward_knee_below_own_foot_fraction_actual": 0.01867704280155642
+    },
+    "RR": {
+      "forward_frames": 1285,
+      "forward_calf_target_median_rad": -1.9735870361328125,
+      "forward_calf_actual_median_rad": -2.2035582065582275,
+      "forward_calf_mean_actual_minus_target_rad": -0.1847033007135651,
+      "forward_calf_mae_rad": 0.19576161269547873,
+      "forward_body_to_foot_vertical_depth_target_median_m": 0.2277103928910412,
+      "forward_body_to_foot_vertical_depth_actual_median_m": 0.19548536334642214,
+      "forward_knee_below_own_foot_fraction_actual": 0.0031128404669260703
+    }
+  },
+  "training_findings": {
+    "base_height_target_m": 0.3,
+    "reset_height_m": 0.42,
+    "collision_reward_scale": 0,
+    "foot_clearance_scale": -0.01,
+    "clearance_height_target_body_relative_m": -0.2,
+    "nonfoot_contact_names": [
+      "thigh",
+      "calf",
+      "base"
+    ]
+  }
+}

@@ -41,6 +41,39 @@ import numpy as np
 import torch
 
 
+class LabNativeGo1JitAdapter:
+    """Translate legacy Gym Go1 observations/actions to the Isaac Lab Go1 JIT contract."""
+    legacy_names = [f"{leg}_{joint}_joint" for leg in ("FL", "FR", "RL", "RR")
+                    for joint in ("hip", "thigh", "calf")]
+    lab_names = [f"{leg}_{joint}_joint" for joint in ("hip", "thigh", "calf")
+                 for leg in ("FL", "FR", "RL", "RR")]
+    legacy_default = torch.tensor([v for leg in ("FL", "FR", "RL", "RR")
+                                   for v in ((0.1 if leg.endswith("L") else -0.1),
+                                             (0.8 if leg.startswith("F") else 1.0), -1.5)])
+    lab_default = torch.tensor([0.1, -0.1, 0.1, -0.1,
+                                0.8, 0.8, 1.0, 1.0,
+                                -1.5, -1.5, -1.5, -1.5])
+
+    def __init__(self, policy):
+        self.policy = policy
+        self.old_indices_for_lab = torch.tensor([self.legacy_names.index(name) for name in self.lab_names])
+        self.lab_indices_for_old = torch.tensor([self.lab_names.index(name) for name in self.legacy_names])
+
+    def __call__(self, history):
+        frames = history.reshape(history.shape[0], 6, 45).clone()
+        frames[..., :3] /= frames.new_tensor([2.0, 2.0, 0.25])
+        idx = self.old_indices_for_lab.to(history.device)
+        frames[..., 9:21] = frames[..., 9:21].index_select(-1, idx)
+        frames[..., 21:33] = frames[..., 21:33].index_select(-1, idx)
+        frames[..., 33:45] = frames[..., 33:45].index_select(-1, idx)
+        lab_actions = self.policy(frames.flatten(1))
+        old_idx = self.lab_indices_for_old.to(history.device)
+        lab_defaults = self.lab_default.to(device=history.device, dtype=history.dtype)
+        old_defaults = self.legacy_default.to(device=history.device, dtype=history.dtype)
+        target = lab_defaults + 0.25 * lab_actions
+        return (target.index_select(-1, old_idx) - old_defaults) / 0.25
+
+
 def play(args, x_vel=1.0, y_vel=0.0, yaw_vel=0.0):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     # override some parameters for testing
@@ -63,14 +96,20 @@ def play(args, x_vel=1.0, y_vel=0.0, yaw_vel=0.0):
     env.commands[:, 2] = yaw_vel
 
     obs = env.get_observations()
-    # load policy
-    train_cfg.runner.resume = True
-    ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
-    policy = ppo_runner.get_inference_policy(device=env.device)
+    # Load either a standalone JIT policy or the configured training checkpoint.
+    if args.jit_policy:
+        policy = torch.jit.load(args.jit_policy, map_location=env.device).eval()
+        if args.lab_native_io:
+            policy = LabNativeGo1JitAdapter(policy)
+        print(f"Loaded TorchScript policy: {args.jit_policy}")
+    else:
+        train_cfg.runner.resume = True
+        ppo_runner, train_cfg = task_registry.make_alg_runner(env=env, name=args.task, args=args, train_cfg=train_cfg)
+        policy = ppo_runner.get_inference_policy(device=env.device)
 
 
     # export policy as a jit module (used to run it from C++)
-    if EXPORT_POLICY:
+    if EXPORT_POLICY and not args.jit_policy:
         path = os.path.join(LEGGED_GYM_ROOT_DIR, 'logs', train_cfg.runner.experiment_name, 'exported', 'policies')
         export_policy_as_jit(ppo_runner.alg.actor_critic, path)
         print('Exported policy as jit script to: ', path)
@@ -85,13 +124,21 @@ def play(args, x_vel=1.0, y_vel=0.0, yaw_vel=0.0):
     camera_direction = np.array(env_cfg.viewer.lookat) - np.array(env_cfg.viewer.pos)
     img_idx = 0
 
-    for i in range(10*int(env.max_episode_length)):
+    requested_steps = args.play_steps if args.play_steps > 0 else 10 * int(env.max_episode_length)
+    initial_root_z = env.root_states[:, 2].clone()
+    done_count = 0
+    for i in range(requested_steps):
     
         actions = policy(obs.detach())
         env.commands[:, 0] = x_vel
         env.commands[:, 1] = y_vel
         env.commands[:, 2] = yaw_vel
         obs, _, rews, dones, infos, _, _ = env.step(actions.detach())
+        done_count += int(dones.sum().item())
+        if args.follow_camera:
+            target = env.root_states[0, :3].detach().cpu().numpy()
+            env.set_camera(target + np.array([-2.0, -2.5, 1.3]), target + np.array([0.0, 0.0, 0.2]))
+            env.render()
 
         if RECORD_FRAMES:
             if i % 2:
@@ -119,6 +166,7 @@ def play(args, x_vel=1.0, y_vel=0.0, yaw_vel=0.0):
                     'contact_forces_z': env.contact_forces[robot_index, env.feet_indices, 2].cpu().numpy()
                 }
             )
+
         elif i==stop_state_log:
             logger.plot_states()
         if  0 < i < stop_rew_log:
@@ -128,6 +176,20 @@ def play(args, x_vel=1.0, y_vel=0.0, yaw_vel=0.0):
                     logger.log_rewards(infos["episode"], num_episodes)
         elif i==stop_rew_log:
             logger.print_rewards()
+
+    print(f"PLAY_SUMMARY steps={requested_steps} done_count={done_count} "
+          f"root_z_start={initial_root_z.mean().item():.3f} "
+          f"root_z_end={env.root_states[:, 2].mean().item():.3f} "
+          f"base_vx_end={env.base_lin_vel[:, 0].mean().item():.3f} "
+          f"base_vy_end={env.base_lin_vel[:, 1].mean().item():.3f} "
+          f"base_wz_end={env.base_ang_vel[:, 2].mean().item():.3f}")
+    if args.frame_path and not args.headless:
+        if args.follow_camera:
+            target = env.root_states[0, :3].detach().cpu().numpy()
+            env.set_camera(target + np.array([-2.0, -2.5, 1.3]), target + np.array([0.0, 0.0, 0.2]))
+        os.makedirs(os.path.dirname(args.frame_path) or ".", exist_ok=True)
+        env.gym.write_viewer_image_to_file(env.viewer, args.frame_path)
+        print(f"Saved final viewer frame: {args.frame_path}")
 
 if __name__ == '__main__':
     EXPORT_POLICY = True

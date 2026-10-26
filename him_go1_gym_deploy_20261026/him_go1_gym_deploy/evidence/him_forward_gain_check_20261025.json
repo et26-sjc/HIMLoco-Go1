@@ -1,0 +1,36 @@
+{
+  "log": "/home/sjc/HIMLoco_WTW_deploy/HIMLoco_WTW_deploy/audit/20261025_fixes/him_forward_20261025_190717_19075.jsonl",
+  "release": "20261025_forward_trial_3",
+  "verification": "Bundle verified 75 files; bridge source digest verified; no motor process started",
+  "policy_frames": 3508,
+  "phase_gain_scales": {
+    "CALIBRATE": {
+      "frames": 151,
+      "min": 0.0,
+      "max": 1.0
+    },
+    "SETTLE": {
+      "frames": 10,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "READY": {
+      "frames": 111,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "RAMP": {
+      "frames": 51,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "RUNNING": {
+      "frames": 3508,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  "effective_requested_kp": 40.0,
+  "effective_requested_kd": 1.0,
+  "note": "Gain arrays reconstructed offline using the deployed publisher path; not a live LCM or UDP packet capture. MCU feedback does not read back configured gains."
+}
